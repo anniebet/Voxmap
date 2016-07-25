@@ -591,7 +591,8 @@ bool VoxbloxNode::generateMeshCallback(
     ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename_.c_str());
   }
 
-  io::SaveLayer(tsdf_map_->getTsdfLayer(), proto_filename_);
+  encoder_.write_layer(tsdf_map_->getTsdfLayer(), proto_filename_);
+  //io::SaveLayer(tsdf_map_->getTsdfLayer(), proto_filename_);
 
   ROS_INFO_STREAM("Mesh Timings: " << std::endl << timing::Timing::Print());
   return true;

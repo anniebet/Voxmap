@@ -17,7 +17,7 @@ class Encoder {
     std::string path = folder_path + '/' + file_name;
     std::ifstream file(path, std::ios::in | std::ios::binary);
 
-    mat->resize(height,width);
+    mat->resize(height, width);
 
     if (file.is_open()) {
       for (size_t i = 0; i < height; ++i) {
@@ -84,6 +84,33 @@ class Encoder {
 
     for (AnyIndex block_idx : blocks) {
       denoise_block(layer->getBlockPtrByIndex(block_idx));
+    }
+  }
+
+  void write_layer(const Layer<TsdfVoxel>& layer, const std::string& file_path) {
+    std::ofstream file(file_path, std::ios::out | std::ios::binary);
+    if (file.is_open()) {
+      BlockIndexList blocks;
+      layer.getAllAllocatedBlocks(&blocks);
+
+      unsigned int num_blocks = blocks.size();
+      unsigned int block_info = 2 * layer.voxels_per_side() *
+                                layer.voxels_per_side() *
+                                layer.voxels_per_side();
+
+      file.write((char*)&num_blocks, sizeof(unsigned int));
+      file.write((char*)&block_info, sizeof(unsigned int));
+
+      for (AnyIndex block_idx : blocks) {
+
+        for (size_t i = 0; i < (block_info / 2); ++i) {
+          float value = layer.getBlockByIndex(block_idx).getVoxelByLinearIndex(i).distance;
+          file.write((char*)&value, sizeof(float));
+          value = layer.getBlockByIndex(block_idx).getVoxelByLinearIndex(i).weight;
+          file.write((char*)&value, sizeof(float));
+        }
+      }
+      file.close();
     }
   }
 };
