@@ -18,6 +18,7 @@
   <depend>eigen_catkin</depend>
   <depend>eigen_checks</depend>
   <depend>glog_catkin</depend>
+  <depend>pcl_ros</depend>
   <depend>gflags_catkin</depend>
   <depend>minkindr</depend>
   <depend>protobuf_catkin</depend>
