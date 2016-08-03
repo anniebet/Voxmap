@@ -29,6 +29,9 @@ class Encoder {
       }
       file.close();
     }
+    else{
+      ROS_ERROR_STREAM("Could not load " << path);
+    }
   }
 
   void block_values_to_vector(const Block<TsdfVoxel>& block,
@@ -48,13 +51,21 @@ class Encoder {
     }
   }
 
+  static float sigmoid(float x)
+  {
+    return 1/(1+std::exp(-x));
+  }
+
   void full_to_hidden(const Eigen::VectorXf& full, Eigen::VectorXf* hidden) {
     *hidden = W_ * full + b_;
+    hidden->unaryExpr(&Encoder::sigmoid);
   }
 
   void hidden_to_full(const Eigen::VectorXf& hidden, Eigen::VectorXf* full) {
     *full = W_prime_ * hidden + b_prime_;
+    full->unaryExpr(&Encoder::sigmoid);
   }
+
 
  public:
   Encoder(const std::string& folder_path, size_t voxels_per_side,
@@ -70,12 +81,14 @@ class Encoder {
 
   void denoise_block(Block<TsdfVoxel>::Ptr block) {
     Eigen::VectorXf full_vec(block_elements_);
+    Eigen::VectorXf full_vec2(block_elements_);
     Eigen::VectorXf hidden_vec(hidden_units_);
 
     block_values_to_vector(*block, &full_vec);
     full_to_hidden(full_vec, &hidden_vec);
-    hidden_to_full(hidden_vec, &full_vec);
-    vector_to_block_values(full_vec, block);
+    std::cerr << hidden_vec << std::endl;
+    hidden_to_full(hidden_vec, &full_vec2);
+    vector_to_block_values(full_vec2, block);
   }
 
   void denoise_layer(Layer<TsdfVoxel>* layer) {

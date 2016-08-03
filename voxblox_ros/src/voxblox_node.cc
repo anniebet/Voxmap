@@ -130,8 +130,8 @@ VoxbloxNode::VoxbloxNode(const ros::NodeHandle& nh,
       // 10 ms here:
       timestamp_tolerance_ns_(10000000),
 
-      encoder_("/home/zac/catkin_ws/src/voxblox/voxblox_ros/cfg/encoder", 16,
-              100) {
+      encoder_("/home/z/catkin_ws/src/voxblox/voxblox_ros/cfg/encoder", 16,
+              1000) {
   // Before subscribing, determine minimum time between messages.
   // 0 by default.
   double min_time_between_msgs_sec = 0.0;
@@ -591,7 +591,7 @@ bool VoxbloxNode::generateMeshCallback(
     ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename_.c_str());
   }
 
-  encoder_.write_layer(tsdf_map_->getTsdfLayer(), proto_filename_);
+  //encoder_.write_layer(tsdf_map_->getTsdfLayer(), proto_filename_);
   //io::SaveLayer(tsdf_map_->getTsdfLayer(), proto_filename_);
 
   ROS_INFO_STREAM("Mesh Timings: " << std::endl << timing::Timing::Print());
