@@ -53,6 +53,9 @@ class VoxbloxNode {
   bool denoiseCallback(std_srvs::Empty::Request& request,     // NOLINT
                        std_srvs::Empty::Response& response);  // NOLINT
 
+  bool writeVectorsCallback(std_srvs::Empty::Request& request,     // NOLINT
+                       std_srvs::Empty::Response& response);  // NOLINT
+
   void updateMeshEvent(const ros::TimerEvent& e);
 
  private:
@@ -102,6 +105,7 @@ class VoxbloxNode {
   // Services.
   ros::ServiceServer generate_mesh_srv_;
   ros::ServiceServer denoise_srv_;
+  ros::ServiceServer write_vectors_srv_;
 
   // Timers.
   ros::Timer update_mesh_timer_;
@@ -130,8 +134,7 @@ VoxbloxNode::VoxbloxNode(const ros::NodeHandle& nh,
       // 10 ms here:
       timestamp_tolerance_ns_(10000000),
 
-      encoder_("/home/z/catkin_ws/src/voxblox/voxblox_ros/cfg/encoder", 16,
-              1000) {
+      encoder_("/media/z/Windows/bag/encoder", 100, 1.0) {
   // Before subscribing, determine minimum time between messages.
   // 0 by default.
   double min_time_between_msgs_sec = 0.0;
@@ -223,6 +226,8 @@ VoxbloxNode::VoxbloxNode(const ros::NodeHandle& nh,
       "generate_mesh", &VoxbloxNode::generateMeshCallback, this);
   denoise_srv_ = nh_private_.advertiseService(
       "denoise", &VoxbloxNode::denoiseCallback, this);
+  write_vectors_srv_ = nh_private_.advertiseService(
+      "write_vectors", &VoxbloxNode::writeVectorsCallback, this);
 
   // If set, use a timer to progressively integrate the mesh.
   double update_mesh_every_n_sec = 0.0;
@@ -600,9 +605,16 @@ bool VoxbloxNode::generateMeshCallback(
 
 bool VoxbloxNode::denoiseCallback(std_srvs::Empty::Request& request,
                                   std_srvs::Empty::Response& response) {
-  encoder_.denoise_layer(tsdf_map_->getTsdfLayerPtr());
+  encoder_.denoiseLayer(tsdf_map_->getTsdfLayerPtr());
   return true;
 }
+
+bool VoxbloxNode::writeVectorsCallback(std_srvs::Empty::Request& request,
+                                  std_srvs::Empty::Response& response) {
+  encoder_.writeLayer(*(tsdf_map_->getTsdfLayerPtr()),proto_filename_);
+  return true;
+}
+
 
 void VoxbloxNode::updateMeshEvent(const ros::TimerEvent& e) {
   if (verbose_) {
