@@ -8,19 +8,6 @@ namespace voxblox {
 // unnamed namespace to hide functions
 namespace {
 
-bool createMatrixFile(const std::string& folder_path, const std::string& name,
-                      std::ofstream* file_stream) {
-  const std::string file_path = folder_path + "/" + name + ".bin";
-  *file_stream = std::ofstream(file_path, std::ios::out | std::ios::binary);
-
-  if (file_stream->is_open()) {
-    return true;
-  } else {
-    ROS_ERROR_STREAM("Failed to create/open " << file_path);
-    return false;
-  }
-}
-
 void writeMatrixHeader(std::ofstream& file_stream,
                        uint32_t element_size_in_bytes, uint32_t rows,
                        uint32_t columns) {
@@ -37,9 +24,16 @@ void writeLayerToMatrixFiles(const Layer<TsdfVoxel>& layer,
                              const std::string& folder_path) {
   std::ofstream distance_file, weight_file, color_file;
 
-  if (createMatrixFile(folder_path, "distance", &distance_file) &&
-      createMatrixFile(folder_path, "weight", &weight_file) &&
-      createMatrixFile(folder_path, "color", &color_file)) {
+  std::string file_path = folder_path + "/distance.bin";
+  std::ofstream distance_file(file_path, std::ios::out | std::ios::binary);
+  std::string file_path = folder_path + "/weight.bin";
+  std::ofstream distance_file(file_path, std::ios::out | std::ios::binary);
+  std::string file_path = folder_path + "/color.bin";
+  std::ofstream distance_file(file_path, std::ios::out | std::ios::binary);
+
+  if (distance_file.is_open() &&
+      weight_file.is_open() &&
+      color_file.is_open()) {
     // get and write matrix sizes
     BlockIndexList blocks;
     layer.getAllAllocatedBlocks(&blocks);
