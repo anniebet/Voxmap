@@ -266,6 +266,10 @@ class TsdfIntegrator {
     integrate_timer.Stop();
   }
 
+  Config getConfig(){
+    return config_;
+  } 
+
  protected:
   Layer<TsdfVoxel>* layer_;
 

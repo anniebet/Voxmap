@@ -20,6 +20,7 @@
 #include "voxblox/io/layer_io.h"
 
 #include "voxblox/autoencoder/encoder.h"
+#include "voxblox/autoencoder/matrix_file_writer.h"
 
 #include "voxblox_ros/visualization.h"
 
@@ -53,8 +54,8 @@ class VoxbloxNode {
   bool denoiseCallback(std_srvs::Empty::Request& request,     // NOLINT
                        std_srvs::Empty::Response& response);  // NOLINT
 
-  bool writeVectorsCallback(std_srvs::Empty::Request& request,     // NOLINT
-                       std_srvs::Empty::Response& response);  // NOLINT
+  bool writeMatrixFilesCallback(std_srvs::Empty::Request& request,     // NOLINT
+                                std_srvs::Empty::Response& response);  // NOLINT
 
   void updateMeshEvent(const ros::TimerEvent& e);
 
@@ -84,6 +85,9 @@ class VoxbloxNode {
   // protobuf file
   std::string proto_filename_;
 
+  // matrix output folder
+  std::string matrix_files_ouput_folder_;
+
   // Keep track of these for throttling.
   ros::Duration min_time_between_msgs_;
   ros::Time last_msg_time_;
@@ -105,7 +109,7 @@ class VoxbloxNode {
   // Services.
   ros::ServiceServer generate_mesh_srv_;
   ros::ServiceServer denoise_srv_;
-  ros::ServiceServer write_vectors_srv_;
+  ros::ServiceServer write_matrix_files_srv_;
 
   // Timers.
   ros::Timer update_mesh_timer_;
@@ -132,9 +136,8 @@ VoxbloxNode::VoxbloxNode(const ros::NodeHandle& nh,
       world_frame_("world"),
       use_tf_transforms_(true),
       // 10 ms here:
-      timestamp_tolerance_ns_(10000000),
-
-      encoder_("/media/z/Windows/bag/encoder", 100, 1.0) {
+      timestamp_tolerance_ns_(10000000)
+     {
   // Before subscribing, determine minimum time between messages.
   // 0 by default.
   double min_time_between_msgs_sec = 0.0;
@@ -194,7 +197,10 @@ VoxbloxNode::VoxbloxNode(const ros::NodeHandle& nh,
   tsdf_integrator_.reset(
       new TsdfIntegrator(tsdf_map_->getTsdfLayerPtr(), integrator_config));
 
-  nh_private_.param("proto_filename", proto_filename_, proto_filename_);
+  nh_private_.param("matrix_files_ouput_folder", matrix_files_ouput_folder_,
+                    matrix_files_ouput_folder_);
+
+  encoder_.setup("/home/z/datasets/kitti/encoder_values", integrator_config);
 
   // Mesh settings.
   nh_private_.param("mesh_filename", mesh_filename_, mesh_filename_);
@@ -226,8 +232,8 @@ VoxbloxNode::VoxbloxNode(const ros::NodeHandle& nh,
       "generate_mesh", &VoxbloxNode::generateMeshCallback, this);
   denoise_srv_ = nh_private_.advertiseService(
       "denoise", &VoxbloxNode::denoiseCallback, this);
-  write_vectors_srv_ = nh_private_.advertiseService(
-      "write_vectors", &VoxbloxNode::writeVectorsCallback, this);
+  write_matrix_files_srv_ = nh_private_.advertiseService(
+      "write_matrix_files", &VoxbloxNode::writeMatrixFilesCallback, this);
 
   // If set, use a timer to progressively integrate the mesh.
   double update_mesh_every_n_sec = 0.0;
@@ -596,8 +602,8 @@ bool VoxbloxNode::generateMeshCallback(
     ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename_.c_str());
   }
 
-  //encoder_.write_layer(tsdf_map_->getTsdfLayer(), proto_filename_);
-  //io::SaveLayer(tsdf_map_->getTsdfLayer(), proto_filename_);
+  // encoder_.write_layer(tsdf_map_->getTsdfLayer(), proto_filename_);
+  // io::SaveLayer(tsdf_map_->getTsdfLayer(), proto_filename_);
 
   ROS_INFO_STREAM("Mesh Timings: " << std::endl << timing::Timing::Print());
   return true;
@@ -609,12 +615,13 @@ bool VoxbloxNode::denoiseCallback(std_srvs::Empty::Request& request,
   return true;
 }
 
-bool VoxbloxNode::writeVectorsCallback(std_srvs::Empty::Request& request,
-                                  std_srvs::Empty::Response& response) {
-  encoder_.writeLayer(*(tsdf_map_->getTsdfLayerPtr()),proto_filename_);
+bool VoxbloxNode::writeMatrixFilesCallback(
+    std_srvs::Empty::Request& request, std_srvs::Empty::Response& response) {
+  writeLayerToMatrixFiles(*(tsdf_map_->getTsdfLayerPtr()),
+                          tsdf_integrator_->getConfig(),
+                          matrix_files_ouput_folder_);
   return true;
 }
-
 
 void VoxbloxNode::updateMeshEvent(const ros::TimerEvent& e) {
   if (verbose_) {

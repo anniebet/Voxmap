@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="ISO-8859-15"?>
+<launch>
+  
+  <param name="/use_sim_time" value="true" />
+
+  <node name="voxblox_node" pkg="voxblox_ros" type="voxblox_node" output="screen" args="--alsologtostderr" clear_params="true">
+    <remap from="pointcloud" to="stereo/points2"/>
+    <param name="tsdf_voxel_size" value="0.20" />
+    <param name="max_ray_length_m" value = "40" />
+    <param name="tsdf_voxels_per_side" value="8" />
+    <param name="voxel_carving_enabled" value="true" />
+    <param name="color_mode" value="color" />
+    <param name="use_tf_transforms" value="true" />
+    <param name="verbose" value="false" />
+    <param name="truncation_distance" value="1.0" />
+    <param name="max_weight" value="20.0"/>
+    <param name="mesh_min_weight" value="3.0"/>
+    <param name="update_mesh_every_n_sec" value="2.0" />
+
+    <param name="matrix_files_ouput_folder" value="/home/z/datasets/kitti/matricies" />
+    <param name="mesh_filename" value="/home/z/datasets/kitti/out.ply" />
+  </node>
+
+  <node pkg="rosbag" type="play" name="rosbagPlay" output="screen" args="-l -r 0.2 --clock /home/z/datasets/kitti/bags/drive_0061.bag">
+  </node>
+
+<group ns="stereo" >
+  <node pkg="stereo_image_proc" name="stereo_image_proc" type="stereo_image_proc" output="screen">
+    <remap from="left/image_raw" to="/cam02/image_raw"/>
+    <remap from="left/camera_info" to="/cam02/camera_info"/>
+    <remap from="right/image_raw" to="/cam03/image_raw"/>
+    <remap from="right/camera_info" to="/cam03/camera_info"/>
+    <param name="approximate_sync" value="true"/>
+  </node>
+</group>
+
+</launch>
