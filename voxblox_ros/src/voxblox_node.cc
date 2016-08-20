@@ -200,7 +200,7 @@ VoxbloxNode::VoxbloxNode(const ros::NodeHandle& nh,
   nh_private_.param("matrix_files_ouput_folder", matrix_files_ouput_folder_,
                     matrix_files_ouput_folder_);
 
-  encoder_.setup("/home/z/datasets/kitti/encoder_values", integrator_config);
+  encoder_.setup("/home/zac/data/kitti/encoder_values", integrator_config);
 
   // Mesh settings.
   nh_private_.param("mesh_filename", mesh_filename_, mesh_filename_);

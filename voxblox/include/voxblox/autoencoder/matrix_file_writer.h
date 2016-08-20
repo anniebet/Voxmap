@@ -22,14 +22,13 @@ void writeMatrixHeader(std::ofstream& file_stream,
 void writeLayerToMatrixFiles(const Layer<TsdfVoxel>& layer,
                              const TsdfIntegrator::Config& config,
                              const std::string& folder_path) {
-  std::ofstream distance_file, weight_file, color_file;
 
   std::string file_path = folder_path + "/distance.bin";
   std::ofstream distance_file(file_path, std::ios::out | std::ios::binary);
-  std::string file_path = folder_path + "/weight.bin";
-  std::ofstream distance_file(file_path, std::ios::out | std::ios::binary);
-  std::string file_path = folder_path + "/color.bin";
-  std::ofstream distance_file(file_path, std::ios::out | std::ios::binary);
+  file_path = folder_path + "/weight.bin";
+  std::ofstream weight_file(file_path, std::ios::out | std::ios::binary);
+  file_path = folder_path + "/color.bin";
+  std::ofstream color_file(file_path, std::ios::out | std::ios::binary);
 
   if (distance_file.is_open() &&
       weight_file.is_open() &&
