@@ -5,12 +5,15 @@
 #include <vector>
 
 #include <Eigen/Core>
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include "voxblox/core/layer.h"
 #include "voxblox/core/voxel.h"
 #include "voxblox/integrator/integrator_utils.h"
 #include "voxblox/utils/timing.h"
+
+DEFINE_bool(use_landmarks_integration_option, false, "Use integration option for landmarks");
 
 namespace voxblox {
 
@@ -72,9 +75,17 @@ class TsdfIntegrator {
         (sdf * weight + tsdf_voxel->distance * tsdf_voxel->weight) /
         new_weight;
 
-    tsdf_voxel->distance = (new_sdf > 0.0)
-                               ? std::min(truncation_distance, new_sdf)
-                               : std::max(-truncation_distance, new_sdf);
+    if (FLAGS_use_landmarks_integration_option) {
+      if ((new_sdf < tsdf_voxel->distance) || (tsdf_voxel->weight == 0.f)) {
+        tsdf_voxel->distance = (new_sdf > 0.0)
+                                   ? std::min(truncation_distance, new_sdf)
+                                   : std::max(-truncation_distance, new_sdf);
+      }
+    } else {
+      tsdf_voxel->distance = (new_sdf > 0.0)
+                                 ? std::min(truncation_distance, new_sdf)
+                                 : std::max(-truncation_distance, new_sdf);
+    }
     tsdf_voxel->weight = std::min(config_.max_weight, new_weight);
   }
 
