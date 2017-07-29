@@ -184,7 +184,7 @@ class ConcurrentHashMap {
     // iterate through the list in the bucket until at the correct hash or at
     // the end
     while (*data_ptr != nullptr || (*data_ptr)->hash != *hash) {
-      atomic_ptr = &(data_ptr->next_element);
+      atomic_ptr = &((*data_ptr)->next_element);
       *data_ptr = atomic_ptr->load(std::memory_order_relaxed);
     }
 
