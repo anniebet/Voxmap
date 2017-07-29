@@ -12,13 +12,31 @@
 
 namespace voxblox {
 
+// Simple concurrent map.
+// Erasing elements is NOT thread safe.
+// Automatic rehashing, NULLIFIES all thread safety guarantees.
+// Manual rehashing can be called with rehash(), if the table does not need to
+// expand it is a cheap operation but is NOT thread safe.
+// Modifying an existing element is only thread safe if ValueType is atomic.
+// Multiple threads can read existing elements and create new elements
+// simultaneously without issues.
+// Under the hood all data is stored using atomic pointers that are organized
+// into linked lists in an array.
+// The hash rather than the index is used to find if two values are the same,
+// this is quick but can cause two elements to be erroneously seen as belonging
+// together.
+// Reading a value is guaranteed to get it if it exists, However if its value
+// has recently been changed by another thread, the read may return the old
+// value. This can happen even if the writing thread has made the change and
+// exited the function before the read begins.
+// the size() function may be slightly off under some thread conditions.
+//
+// The map is at its best when you never need to erase or modify values. An
+// example of this is storing pointers to blocks for a TSDF integrator.
 template <typename ValueType>
 class ConcurrentHashMap {
  public:
-
-  ConcurrentHashMap()
-      : ConcurrentHashMap(1) {
-  }
+  ConcurrentHashMap() : ConcurrentHashMap(1) {}
 
   ConcurrentHashMap(size_t num_inital_buckets) {
     // all logic is based on the assumption there is at least 1 bucket
@@ -27,62 +45,70 @@ class ConcurrentHashMap {
     }
 
     data_buckets_ =
-        std::make_shared<std::vector<typename Data::Ptr>>(num_inital_buckets);
+        std::make_shared<std::vector<std::atomic<Data*>>>(num_inital_buckets);
   }
 
   ~ConcurrentHashMap() { clear(); }
 
+  // thread safe, value may be old
   bool tryFind(const AnyIndex& index, ValueType* value) const {
-    typename Data::Ptr& data_ptr = getDataPtr(index);
+    size_t hash;
+    std::atomic<Data*>* atomic_ptr;
+    Data* data_ptr;
 
-    if (data_ptr == nullptr) {
-      return false;
-    } else {
+    if (getDataPtr(index, &hash, atomic_ptr, &data_ptr)) {
       value = &(data_ptr->value);
       return true;
-    }
-  }
-
-  bool tryFind(const AnyIndex& index, ValueType& value) const {
-    typename Data::Ptr& data_ptr = getDataPtr(index);
-
-    if (data_ptr == nullptr) {
-      return false;
     } else {
-      value = data_ptr->value;
-      return true;
+      return false;
     }
   }
 
-  // will create element if it does not exist
+  // thread safe, value may be old
+  bool tryFind(const AnyIndex& index, ValueType& value) const {
+    return tryFind(index, &value);
+  }
+
+  // will create element if it does not exist, only thread safe is ValueType is
+  // atomic and automatic rehashing is disabled
+  void updateOrInsert(const AnyIndex& index, const ValueType& value) {
+    Data* data_ptr;
+
+    getOrCreateDataPtr(index, &data_ptr);
+
+    data_ptr->value = value;
+  }
+
+  // will create element if it does not exist, thread safe, value may be old
   ValueType& findOrCreate(const AnyIndex& index) {
-    typename Data::Ptr& data_ptr = getDataPtr(index);
+    Data* data_ptr;
 
-    if (data_ptr == nullptr) {
-      data_ptr = new Data;
-      ++num_elements_;
-
-      rehash();
-    }
+    getOrCreateDataPtr(index, &data_ptr);
 
     return data_ptr->value;
   }
 
+  // thread safe
   bool elementExists(const AnyIndex& index) const {
-    typename Data::Ptr& data_ptr = getDataPtr(index);
-    return data_ptr != nullptr;
+    size_t hash;
+    std::atomic<Data*>* atomic_ptr;
+    Data* data_ptr;
+
+    return getDataPtr(index, &hash, atomic_ptr, &data_ptr);
   }
 
+  // currently not thread safe
+  // could be made to be if there is a need
   bool erase(const AnyIndex& index) {
     const size_t hash = hashFunction(index);
 
-    typename Data::Ptr prev_data_ptr;
-    typename Data::Ptr& data_ptr =
-        data_buckets_->at(hash % data_buckets_->size());
+    Data* prev_data_ptr;
+    Data* data_ptr = data_buckets_->at(hash % data_buckets_->size())
+                         .load(std::memory_order_relaxed);
 
     while (data_ptr != nullptr || data_ptr->hash != hash) {
       prev_data_ptr = data_ptr;
-      data_ptr = data_ptr->next_element;
+      data_ptr = data_ptr->next_element.load(std::memory_order_relaxed);
     }
 
     if (data_ptr == nullptr) {
@@ -91,22 +117,27 @@ class ConcurrentHashMap {
     }
 
     if (prev_data_ptr != nullptr) {
-      prev_data_ptr->next_element = data_ptr->next_element;
+      prev_data_ptr->next_element.store(data_ptr->next_element,
+                                        std::memory_order_relaxed);
     }
 
     delete data_ptr;
-    data_ptr = nullptr;
     --num_elements_;
 
     return true;
   }
 
+  // count may lag actual
   size_t size() const { return num_elements_; }
 
+  // not thread safe
   void clear() {
-    for (typename Data::Ptr data_ptr : *data_buckets_) {
+    for (size_t i = 0; i < data_buckets_->size(); ++i) {
+      Data* data_ptr = data_buckets_->at(i).load(std::memory_order_relaxed);
+
       while (data_ptr != nullptr) {
-        typename Data::Ptr next_data_ptr = data_ptr->next_element;
+        Data* next_data_ptr =
+            data_ptr->next_element.load(std::memory_order_relaxed);
         delete data_ptr;
         data_ptr = next_data_ptr;
       }
@@ -118,15 +149,16 @@ class ConcurrentHashMap {
     data_buckets_->resize(1);
   }
 
-  void getAllElements(std::vector<ValueType>* value_vector){
-
+  // thread safe but will miss values inserted while it is operating
+  void getAllElements(std::vector<ValueType>* value_vector) const {
     value_vector->clear();
     value_vector->reserve(num_elements_);
 
-    for(typename Data::Ptr data_ptr : data_buckets_ ){
+    for (size_t i = 0; i < data_buckets_->size(); ++i) {
+      Data* data_ptr = data_buckets_->at(i).load(std::memory_order_relaxed);
       while (data_ptr != nullptr) {
-        value_vector->push_back(data_ptr_->value);
-        data_ptr = data_ptr->next_element;
+        value_vector->push_back(data_ptr->value);
+        data_ptr = data_ptr->next_element.load(std::memory_order_relaxed);
       }
     }
   }
@@ -135,26 +167,71 @@ class ConcurrentHashMap {
   struct Data {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    typedef typename std::atomic<Data*> Ptr;
-
     std::size_t hash;
     ValueType value;
-    Ptr next_element;
+    std::atomic<Data*> next_element;
   };
 
-  // will return nullptr if it is not in the list
-  typename Data::Ptr& getDataPtr(const AnyIndex& index) const {
-    const size_t hash = hashFunction(index);
-    typename Data::Ptr& data_ptr =
-        data_buckets_->at(hash % data_buckets_->size());
+  // thread safe, though the data can be outdated
+  bool getDataPtr(const AnyIndex& index, size_t* hash,
+                  std::atomic<Data*>* atomic_ptr, Data** data_ptr) const {
+    *hash = hashFunction(index);
 
-    while (data_ptr != nullptr || data_ptr->hash != hash) {
-      data_ptr = data_ptr->next_element;
+    // get atomic pointer to correct bucket
+    atomic_ptr = &(data_buckets_->at(*hash % data_buckets_->size()));
+    *data_ptr = atomic_ptr->load(std::memory_order_relaxed);
+
+    // iterate through the list in the bucket until at the correct hash or at
+    // the end
+    while (*data_ptr != nullptr || (*data_ptr)->hash != *hash) {
+      atomic_ptr = &(data_ptr->next_element);
+      *data_ptr = atomic_ptr->load(std::memory_order_relaxed);
     }
 
-    return data_ptr;
+    // return true if read succeeded
+    return *data_ptr != nullptr;
   }
 
+  // if the data does not exist it will be created, thread safe
+  void getOrCreateDataPtr(const AnyIndex& index, Data** data_ptr) {
+    size_t hash;
+    std::atomic<Data*>* atomic_ptr;
+
+    if (!getDataPtr(index, &hash, atomic_ptr, data_ptr)) {
+      // the data does not exist so we are going to create and add it
+      *data_ptr = new Data;
+      (*data_ptr)->hash = hash;
+
+      Data* expected_ptr = nullptr;
+
+      // we are going to repeatedly shove the data into the list until it sticks
+      while (!atomic_ptr->compare_exchange_strong(expected_ptr, *data_ptr)) {
+        // we were beaten to the insert, check if is the data we wanted that
+        // was inserted
+        if (expected_ptr->hash == hash) {
+          // some other thread created the data we needed, use that one instead
+          delete *data_ptr;
+          *data_ptr = expected_ptr;
+          break;
+        }
+
+        // try the insert again
+        atomic_ptr = &(expected_ptr->next_element);
+        expected_ptr = nullptr;
+      }
+
+      // if expected stayed null it was our thread that added the data
+      if (expected_ptr == nullptr) {
+        ++num_elements_;
+
+        rehash();
+      }
+    }
+  }
+
+  // rehashes if the average elements per bucket is over 0.5
+  // the rehash brings this down to 0.25
+  // at least a 50% chance of a memory leak if you create data while its running
   void rehash() {
     static constexpr float max_load_factor =
         0.5f;  // a bit on the low side but blocks are cheap
@@ -166,14 +243,16 @@ class ConcurrentHashMap {
 
     // check if rehash needed
     if (load_fator > max_load_factor) {
-      std::shared_ptr<std::vector<typename Data::Ptr>> new_buckets =
-          std::make_shared<std::vector<typename Data::Ptr>>(static_cast<size_t>(
+      std::shared_ptr<std::vector<std::atomic<Data*>>> new_buckets =
+          std::make_shared<std::vector<std::atomic<Data*>>>(static_cast<size_t>(
               inv_target_load_factor * static_cast<float>(num_elements_)));
 
-      for (typename Data::Ptr data_ptr : *data_buckets_) {
+      for (size_t i = 0; i < data_buckets_->size(); ++i) {
+        Data* data_ptr = data_buckets_->at(i).load(std::memory_order_relaxed);
         while (data_ptr != nullptr) {
-          new_buckets->at(data_ptr->hash % new_buckets->size()) = data_ptr;
-          typename Data::Ptr data_ptr = data_ptr->next_element;
+          new_buckets->at(data_ptr->hash % new_buckets->size())
+              .store(data_ptr, std::memory_order_relaxed);
+          data_ptr = data_ptr->next_element.load(std::memory_order_relaxed);
         }
       }
 
@@ -191,7 +270,7 @@ class ConcurrentHashMap {
   }
 
   std::atomic<size_t> num_elements_;
-  std::shared_ptr<std::vector<typename Data::Ptr>> data_buckets_;
+  std::shared_ptr<std::vector<std::atomic<Data*>>> data_buckets_;
 };
 
 struct BlockIndexHash {

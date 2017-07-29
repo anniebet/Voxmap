@@ -122,16 +122,15 @@ class MeshLayer {
     size_t v = 0;
     std::vector<Mesh::Ptr> mesh_vector;
     mesh_map_.getAllElements(&mesh_vector);
-    for (Mesh::ConstPtr& mesh : mesh_vector) {
-      Mesh::ConstPtr mesh = getMeshPtrByIndex(block_index);
+    for (Mesh::Ptr& mesh : mesh_vector) {
 
       for (size_t i = 0; i < mesh->vertices.size(); ++i) {
         // convert from 3D point to key
         BlockIndex vert_key =
             (key_multiplication_factor * mesh->vertices[i] / block_size())
                 .cast<IndexElement>();
-        if (uniques.find(vert_key) == uniques.end()) {
-          uniques[vert_key] = v;
+        if (!uniques.elementExists(vert_key)) {
+          uniques.updateOrInsert(vert_key, v);
           combined_mesh->vertices.push_back(mesh->vertices[i]);
 
           if (mesh->hasColors()) {
@@ -144,7 +143,7 @@ class MeshLayer {
           temp_indices.push_back(v);
           v++;
         } else {
-          temp_indices.push_back(uniques[vert_key]);
+          temp_indices.push_back(uniques.findOrCreate(vert_key));
         }
       }
     }
