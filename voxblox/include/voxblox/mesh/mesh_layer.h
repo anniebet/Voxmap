@@ -106,15 +106,6 @@ class MeshLayer {
     mesh_map_.erase(computeBlockIndexFromCoordinates(coords));
   }
 
-  /*void getAllAllocatedMeshes(BlockIndexList* meshes) const {
-    meshes->clear();
-    meshes->reserve(mesh_map_.size());
-    for (const std::pair<const BlockIndex, typename Mesh::Ptr>& kv :
-         mesh_map_) {
-      meshes->emplace_back(kv.first);
-    }
-  }*/
-
   void combineMesh(Mesh::Ptr combined_mesh) const {
     // Used to prevent double ups in vertices
     BlockHashMapType<IndexElement>::type uniques;
@@ -129,7 +120,9 @@ class MeshLayer {
 
     // Combine everything in the layer into one giant combined mesh.
     size_t v = 0;
-    for (Mesh::ConstPtr& mesh : mesh_map_) {
+    std::vector<Mesh::Ptr> mesh_vector;
+    mesh_map_.getAllElements(&mesh_vector);
+    for (Mesh::ConstPtr& mesh : mesh_vector) {
       Mesh::ConstPtr mesh = getMeshPtrByIndex(block_index);
 
       for (size_t i = 0; i < mesh->vertices.size(); ++i) {

@@ -15,41 +15,6 @@ namespace voxblox {
 template <typename ValueType>
 class ConcurrentHashMap {
  public:
-  // I couldn't be bothered implementing a real one, but this will work for
-  // range based for loops
-  class PsuedoIterator {
-    PsuedoIterator(){};
-
-    PsuedoIterator(
-        const size_t idx, const typename ConcurrentHashMap::Data::Ptr data_ptr,
-        const std::shared_ptr<
-            std::vector<typename ConcurrentHashMap::Data::Ptr>>& data_buckets)
-        : idx_(idx), data_ptr_(data_ptr), data_buckets_(data_buckets) {}
-
-    PsuedoIterator(PsuedoIterator&& other){
-      idx_ = other.idx;
-      data_ptr_ = other.data_ptr_;
-      data_buckets_ = other.data_buckets_;
-    }
-
-    PsuedoIterator& operator++() {
-      data_ptr_ = data_ptr_->next_element;
-      while ((data_ptr_ == nullptr) && (data_buckets_.size() > idx_)) {
-        data_ptr_ = data_buckets_->at(idx_++);
-      }
-
-      return *this;
-    }
-
-    ValueType& operator*() { return *data_ptr_->value; }
-    const ValueType& operator*() const { return data_ptr_->value; }
-
-   private:
-    size_t idx_;
-    typename ConcurrentHashMap::Data::Ptr data_ptr_;
-    std::shared_ptr<std::vector<typename ConcurrentHashMap::Data::Ptr>>
-        data_buckets_;
-  };
 
   ConcurrentHashMap()
       : ConcurrentHashMap(1) {
@@ -153,25 +118,17 @@ class ConcurrentHashMap {
     data_buckets_->resize(1);
   }
 
-  PsuedoIterator begin() const{
-    size_t idx;
-    for (idx = 0; idx < data_buckets_.size(); ++idx) {
-      if (data_buckets_->at(idx) != nullptr) {
-        break;
-      }
-    }
-    return PsuedoIterator(idx, data_buckets_->at(idx), data_buckets_);
-  }
+  void getAllElements(std::vector<ValueType>* value_vector){
 
-  PsuedoIterator end() const{
-    int idx;
-    for (idx = data_buckets_.size() - 1; idx >= 0; --idx) {
-      if (data_buckets_->at(idx) != nullptr) {
-        break;
+    value_vector->clear();
+    value_vector->reserve(num_elements_);
+
+    for(typename Data::Ptr data_ptr : data_buckets_ ){
+      while (data_ptr != nullptr) {
+        value_vector->push_back(data_ptr_->value);
+        data_ptr = data_ptr->next_element;
       }
     }
-    return PsuedoIterator(static_cast<size_t>(++idx), data_buckets_->at(idx),
-                          data_buckets_);
   }
 
  private:
