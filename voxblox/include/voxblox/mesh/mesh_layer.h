@@ -23,18 +23,18 @@ class MeshLayer {
 
   // By index.
   inline const Mesh& getMeshByIndex(const BlockIndex& index) const {
-    typename MeshMap::const_iterator it = mesh_map_.find(index);
-    if (it != mesh_map_.end()) {
-      return *(it->second);
+    Mesh::Ptr mesh_ptr;
+    if (mesh_map_.tryFind(index, mesh_ptr)) {
+      return *mesh_ptr;
     } else {
       LOG(FATAL) << "Accessed unallocated mesh at " << index.transpose();
     }
   }
 
   inline Mesh& getMeshByIndex(const BlockIndex& index) {
-    typename MeshMap::iterator it = mesh_map_.find(index);
-    if (it != mesh_map_.end()) {
-      return *(it->second);
+    Mesh::Ptr mesh_ptr;
+    if (mesh_map_.tryFind(index, mesh_ptr)) {
+      return *mesh_ptr;
     } else {
       LOG(FATAL) << "Accessed unallocated mesh at " << index.transpose();
     }
@@ -42,9 +42,9 @@ class MeshLayer {
 
   inline typename Mesh::ConstPtr getMeshPtrByIndex(
       const BlockIndex& index) const {
-    typename MeshMap::const_iterator it = mesh_map_.find(index);
-    if (it != mesh_map_.end()) {
-      return it->second;
+    Mesh::Ptr mesh_ptr;
+    if (mesh_map_.tryFind(index, mesh_ptr)) {
+      return mesh_ptr;
     } else {
       LOG(WARNING) << "Returning null ptr to mesh!";
       return typename Mesh::ConstPtr();
@@ -52,9 +52,9 @@ class MeshLayer {
   }
 
   inline typename Mesh::Ptr getMeshPtrByIndex(const BlockIndex& index) {
-    typename MeshMap::iterator it = mesh_map_.find(index);
-    if (it != mesh_map_.end()) {
-      return it->second;
+    Mesh::Ptr mesh_ptr;
+    if (mesh_map_.tryFind(index, mesh_ptr)) {
+      return mesh_ptr;
     } else {
       LOG(WARNING) << "Returning null ptr to mesh!";
       return typename Mesh::Ptr();
@@ -64,12 +64,7 @@ class MeshLayer {
   // Gets a mesh by the mesh index it if already exists,
   // otherwise allocates a new one.
   inline typename Mesh::Ptr allocateMeshPtrByIndex(const BlockIndex& index) {
-    typename MeshMap::iterator it = mesh_map_.find(index);
-    if (it != mesh_map_.end()) {
-      return it->second;
-    } else {
-      return allocateNewBlock(index);
-    }
+    return mesh_map_.findOrCreate(index);
   }
 
   inline typename Mesh::ConstPtr getMeshPtrByCoordinates(
@@ -95,14 +90,10 @@ class MeshLayer {
 
   // Pure virtual function -- inheriting class MUST overwrite.
   typename Mesh::Ptr allocateNewBlock(const BlockIndex& index) {
-    auto insert_status = mesh_map_.insert(std::make_pair(
-        index, std::shared_ptr<Mesh>(new Mesh(
-                   block_size_, index.cast<FloatingPoint>() * block_size_))));
-    DCHECK(insert_status.second)
-        << "Mesh already exists when allocating at " << index.transpose();
-    DCHECK(insert_status.first->second);
-    DCHECK_EQ(insert_status.first->first, index);
-    return insert_status.first->second;
+    Mesh::Ptr mesh_ptr = mesh_map_.findOrCreate(index);
+    mesh_ptr = std::make_shared<Mesh>(
+        block_size_, index.cast<FloatingPoint>() * block_size_);
+    return mesh_ptr;
   }
 
   inline typename Mesh::Ptr allocateNewBlockByCoordinates(const Point& coords) {
@@ -115,14 +106,14 @@ class MeshLayer {
     mesh_map_.erase(computeBlockIndexFromCoordinates(coords));
   }
 
-  void getAllAllocatedMeshes(BlockIndexList* meshes) const {
+  /*void getAllAllocatedMeshes(BlockIndexList* meshes) const {
     meshes->clear();
     meshes->reserve(mesh_map_.size());
     for (const std::pair<const BlockIndex, typename Mesh::Ptr>& kv :
          mesh_map_) {
       meshes->emplace_back(kv.first);
     }
-  }
+  }*/
 
   void combineMesh(Mesh::Ptr combined_mesh) const {
     // Used to prevent double ups in vertices
@@ -138,9 +129,7 @@ class MeshLayer {
 
     // Combine everything in the layer into one giant combined mesh.
     size_t v = 0;
-    BlockIndexList mesh_indices;
-    getAllAllocatedMeshes(&mesh_indices);
-    for (const BlockIndex& block_index : mesh_indices) {
+    for (Mesh::ConstPtr& mesh : mesh_map_) {
       Mesh::ConstPtr mesh = getMeshPtrByIndex(block_index);
 
       for (size_t i = 0; i < mesh->vertices.size(); ++i) {
