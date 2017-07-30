@@ -140,7 +140,7 @@ class Layer {
     block_map_.erase(computeBlockIndexFromCoordinates(coords));
   }
 
-  void getAllAllocatedBlocks(BlockIndexList* blocks) const {
+  /*void getAllAllocatedBlocks(BlockIndexList* blocks) const {
     CHECK_NOTNULL(blocks);
     blocks->clear();
     blocks->reserve(block_map_.size());
@@ -159,7 +159,7 @@ class Layer {
         blocks->emplace_back(kv.first);
       }
     }
-  }
+  }*/
 
   size_t getNumberOfAllocatedBlocks() const { return block_map_.size(); }
 
