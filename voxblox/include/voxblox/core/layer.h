@@ -42,7 +42,7 @@ class Layer {
   enum class BlockMergingStrategy { kProhibit, kReplace, kDiscard, kMerge };
 
   inline const BlockType& getBlockByIndex(const BlockIndex& index) const {
-    BlockType::Ptr block_ptr;
+    typename BlockType::Ptr block_ptr;
     if (block_map_.tryFind(index, &block_ptr)) {
       return *block_ptr;
     } else {
@@ -51,7 +51,7 @@ class Layer {
   }
 
   inline BlockType& getBlockByIndex(const BlockIndex& index) {
-    BlockType::Ptr block_ptr;
+    typename BlockType::Ptr block_ptr;
     if (block_map_.tryFind(index, &block_ptr)) {
       return *block_ptr;
     } else {
@@ -61,12 +61,12 @@ class Layer {
 
   inline typename BlockType::ConstPtr getBlockPtrByIndex(
       const BlockIndex& index) const {
-    BlockType::Ptr block_ptr;
+    typename BlockType::Ptr block_ptr;
     block_map_.tryFind(index, &block_ptr) return block_ptr;
   }
 
   inline typename BlockType::Ptr getBlockPtrByIndex(const BlockIndex& index) {
-    BlockType::Ptr block_ptr;
+    typename BlockType::Ptr block_ptr;
     block_map_.tryFind(index, &block_ptr) return block_ptr;
   }
 
