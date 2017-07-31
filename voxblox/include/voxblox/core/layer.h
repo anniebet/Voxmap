@@ -42,18 +42,18 @@ class Layer {
   enum class BlockMergingStrategy { kProhibit, kReplace, kDiscard, kMerge };
 
   inline const BlockType& getBlockByIndex(const BlockIndex& index) const {
-    typename BlockHashMap::const_iterator it = block_map_.find(index);
-    if (it != block_map_.end()) {
-      return *(it->second);
+    BlockType::Ptr block_ptr;
+    if (block_map_.tryFind(index, &block_ptr)) {
+      return *block_ptr;
     } else {
       LOG(FATAL) << "Accessed unallocated block at " << index.transpose();
     }
   }
 
   inline BlockType& getBlockByIndex(const BlockIndex& index) {
-    typename BlockHashMap::iterator it = block_map_.find(index);
-    if (it != block_map_.end()) {
-      return *(it->second);
+    BlockType::Ptr block_ptr;
+    if (block_map_.tryFind(index, &block_ptr)) {
+      return *block_ptr;
     } else {
       LOG(FATAL) << "Accessed unallocated block at " << index.transpose();
     }
@@ -61,33 +61,20 @@ class Layer {
 
   inline typename BlockType::ConstPtr getBlockPtrByIndex(
       const BlockIndex& index) const {
-    typename BlockHashMap::const_iterator it = block_map_.find(index);
-    if (it != block_map_.end()) {
-      return it->second;
-    } else {
-      return typename BlockType::ConstPtr();
-    }
+    BlockType::Ptr block_ptr;
+    block_map_.tryFind(index, &block_ptr) return block_ptr;
   }
 
   inline typename BlockType::Ptr getBlockPtrByIndex(const BlockIndex& index) {
-    typename BlockHashMap::iterator it = block_map_.find(index);
-    if (it != block_map_.end()) {
-      return it->second;
-    } else {
-      return typename BlockType::Ptr();
-    }
+    BlockType::Ptr block_ptr;
+    block_map_.tryFind(index, &block_ptr) return block_ptr;
   }
 
   // Gets a block by the block index it if already exists,
   // otherwise allocates a new one.
   inline typename BlockType::Ptr allocateBlockPtrByIndex(
       const BlockIndex& index) {
-    typename BlockHashMap::iterator it = block_map_.find(index);
-    if (it != block_map_.end()) {
-      return it->second;
-    } else {
-      return allocateNewBlock(index);
-    }
+    return block_map_.findOrCreate(index);
   }
 
   inline typename BlockType::ConstPtr getBlockPtrByCoordinates(
@@ -120,8 +107,8 @@ class Layer {
                    voxels_per_side_, voxel_size_,
                    getOriginPointFromGridIndex(index, block_size_)))));
 
-    DCHECK(insert_status.second)
-        << "Block already exists when allocating at " << index.transpose();
+    DCHECK(insert_status.second) << "Block already exists when allocating at "
+                                 << index.transpose();
 
     DCHECK(insert_status.first->second);
     DCHECK_EQ(insert_status.first->first, index);
@@ -140,7 +127,7 @@ class Layer {
     block_map_.erase(computeBlockIndexFromCoordinates(coords));
   }
 
-  void getAllAllocatedBlocks(BlockIndexList* blocks) const {
+  /*void getAllAllocatedBlocks(BlockIndexList* blocks) const {
     CHECK_NOTNULL(blocks);
     blocks->clear();
     blocks->reserve(block_map_.size());
@@ -159,7 +146,7 @@ class Layer {
         blocks->emplace_back(kv.first);
       }
     }
-  }
+  }*/
 
   size_t getNumberOfAllocatedBlocks() const { return block_map_.size(); }
 
@@ -199,9 +186,7 @@ class Layer {
   FloatingPoint voxel_size() const { return voxel_size_; }
   size_t voxels_per_side() const { return voxels_per_side_; }
 
-  void rehash(size_t count){
-    block_map_.rehash(count);
-  }
+  void rehash(size_t count) { block_map_.rehash(count); }
 
   // Serialization tools.
   void getProto(LayerProto* proto) const;

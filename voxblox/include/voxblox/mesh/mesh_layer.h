@@ -24,7 +24,7 @@ class MeshLayer {
   // By index.
   inline const Mesh& getMeshByIndex(const BlockIndex& index) const {
     Mesh::Ptr mesh_ptr;
-    if (mesh_map_.tryFind(index, mesh_ptr)) {
+    if (mesh_map_.tryFind(index, &mesh_ptr)) {
       return *mesh_ptr;
     } else {
       LOG(FATAL) << "Accessed unallocated mesh at " << index.transpose();
@@ -33,7 +33,7 @@ class MeshLayer {
 
   inline Mesh& getMeshByIndex(const BlockIndex& index) {
     Mesh::Ptr mesh_ptr;
-    if (mesh_map_.tryFind(index, mesh_ptr)) {
+    if (mesh_map_.tryFind(index, &mesh_ptr)) {
       return *mesh_ptr;
     } else {
       LOG(FATAL) << "Accessed unallocated mesh at " << index.transpose();
@@ -43,7 +43,7 @@ class MeshLayer {
   inline typename Mesh::ConstPtr getMeshPtrByIndex(
       const BlockIndex& index) const {
     Mesh::Ptr mesh_ptr;
-    if (mesh_map_.tryFind(index, mesh_ptr)) {
+    if (mesh_map_.tryFind(index, &mesh_ptr)) {
       return mesh_ptr;
     } else {
       LOG(WARNING) << "Returning null ptr to mesh!";
@@ -53,7 +53,7 @@ class MeshLayer {
 
   inline typename Mesh::Ptr getMeshPtrByIndex(const BlockIndex& index) {
     Mesh::Ptr mesh_ptr;
-    if (mesh_map_.tryFind(index, mesh_ptr)) {
+    if (mesh_map_.tryFind(index, &mesh_ptr)) {
       return mesh_ptr;
     } else {
       LOG(WARNING) << "Returning null ptr to mesh!";
@@ -119,18 +119,19 @@ class MeshLayer {
     constexpr FloatingPoint key_multiplication_factor = 100;
 
     // Combine everything in the layer into one giant combined mesh.
-    size_t v = 0;
-    std::vector<Mesh::Ptr> mesh_vector;
-    mesh_map_.getAllElements(&mesh_vector);
-    for (Mesh::Ptr& mesh : mesh_vector) {
+    int v = 0;
+    for(Mesh::Ptr& mesh : mesh_map_){
 
       for (size_t i = 0; i < mesh->vertices.size(); ++i) {
         // convert from 3D point to key
         BlockIndex vert_key =
             (key_multiplication_factor * mesh->vertices[i] / block_size())
                 .cast<IndexElement>();
-        if (!uniques.elementExists(vert_key)) {
-          uniques.updateOrInsert(vert_key, v);
+
+        bool is_new_key;
+        int& stored_v = uniques.findOrCreate(vert_key, &is_new_key);
+        if (is_new_key) {
+          stored_v = v;
           combined_mesh->vertices.push_back(mesh->vertices[i]);
 
           if (mesh->hasColors()) {
@@ -143,7 +144,7 @@ class MeshLayer {
           temp_indices.push_back(v);
           v++;
         } else {
-          temp_indices.push_back(uniques.findOrCreate(vert_key));
+          temp_indices.push_back(stored_v);
         }
       }
     }

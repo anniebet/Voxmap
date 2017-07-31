@@ -56,12 +56,9 @@ Layer<VoxelType>::Layer(const Layer& other) {
   block_size_ = other.block_size_;
   block_size_inv_ = other.block_size_inv_;
 
-  for (const typename BlockHashMap::value_type& key_value_pair :
-       other.block_map_) {
-    const BlockIndex& block_idx = key_value_pair.first;
-    const typename BlockType::Ptr& block_ptr = key_value_pair.second;
-
-    typename BlockType::Ptr new_block = allocateBlockPtrByIndex(block_idx);
+  for (const typename BlockType::Ptr& block_ptr : other.block_map_) {
+    typename BlockType::Ptr new_block =
+        allocateBlockPtrByIndex(block_ptr->block_index());
 
     for (size_t linear_idx = 0u; linear_idx < block_ptr->num_voxels();
          ++linear_idx) {
@@ -74,15 +71,15 @@ Layer<VoxelType>::Layer(const Layer& other) {
 
 template <typename VoxelType>
 bool Layer<VoxelType>::saveToFile(const std::string& file_path) const {
-  constexpr bool kIncludeAllBlocks = true;
-  return saveSubsetToFile(file_path, BlockIndexList(), kIncludeAllBlocks);
+  //  constexpr bool kIncludeAllBlocks = true;
+  //  return saveSubsetToFile(file_path, BlockIndexList(), kIncludeAllBlocks);
 }
 
 template <typename VoxelType>
 bool Layer<VoxelType>::saveSubsetToFile(const std::string& file_path,
                                         BlockIndexList blocks_to_include,
                                         bool include_all_blocks) const {
-  CHECK_NE(getType().compare(voxel_types::kNotSerializable), 0)
+  /*CHECK_NE(getType().compare(voxel_types::kNotSerializable), 0)
       << "The voxel type of this layer is not serializable!";
 
   CHECK(!file_path.empty());
@@ -158,7 +155,7 @@ bool Layer<VoxelType>::saveSubsetToFile(const std::string& file_path,
       }
     }
   }
-  outfile.close();
+  outfile.close();*/
   return true;
 }
 
@@ -172,33 +169,49 @@ bool Layer<VoxelType>::addBlockFromProto(const BlockProto& block_proto,
     typename BlockType::Ptr block_ptr(new BlockType(block_proto));
     const BlockIndex block_index =
         getGridIndexFromOriginPoint(block_ptr->origin(), block_size_inv_);
+
     switch (strategy) {
-      case BlockMergingStrategy::kProhibit:
-        CHECK_EQ(block_map_.count(block_index), 0u)
-            << "Block collision at index: " << block_index;
-        block_map_[block_index] = block_ptr;
+      case BlockMergingStrategy::kProhibit: {
+        bool already_existed;
+        block_map_.findOrCreate(block_index, &already_existed) = block_ptr;
+
+        CHECK_EQ(already_existed, false) << "Block collision at index: "
+                                         << block_index;
         break;
-      case BlockMergingStrategy::kReplace:
-        block_map_[block_index] = block_ptr;
+      }
+      case BlockMergingStrategy::kReplace: {
+        block_map_.findOrCreate(block_index) = block_ptr;
         break;
-      case BlockMergingStrategy::kDiscard:
-        block_map_.insert(std::make_pair(block_index, block_ptr));
-        break;
-      case BlockMergingStrategy::kMerge: {
-        typename BlockHashMap::iterator it = block_map_.find(block_index);
-        if (it == block_map_.end()) {
-          block_map_[block_index] = block_ptr;
-        } else {
-          it->second->mergeBlock(*block_ptr);
+      }
+      case BlockMergingStrategy::kDiscard: {
+        bool already_existed;
+        typename BlockType::Ptr& map_block_ptr =
+            block_map_.findOrCreate(block_index, &already_existed);
+        if (!already_existed) {
+          map_block_ptr = block_ptr;
         }
-      } break;
+
+        break;
+      }
+      case BlockMergingStrategy::kMerge: {
+        bool already_existed;
+        typename BlockType::Ptr& map_block_ptr =
+            block_map_.findOrCreate(block_index, &already_existed);
+        if (already_existed) {
+          map_block_ptr->mergeBlock(*block_ptr);
+        } else {
+          map_block_ptr = block_ptr;
+        }
+
+        break;
+      }
       default:
         LOG(FATAL) << "Unknown BlockMergingStrategy: "
                    << static_cast<int>(strategy);
         return false;
     }
     // Mark that this block has been updated.
-    block_map_[block_index]->updated() = true;
+    block_ptr->updated() = true;
   } else {
     LOG(ERROR)
         << "The blocks from this protobuf are not compatible with this layer!";
@@ -238,7 +251,7 @@ size_t Layer<VoxelType>::getMemorySize() const {
   // Calculate size of blocks
   size_t num_blocks = getNumberOfAllocatedBlocks();
   if (num_blocks > 0u) {
-    typename Block<VoxelType>::Ptr block = block_map_.begin()->second;
+    typename Block<VoxelType>::Ptr block = *(block_map_.begin());
     size += num_blocks * block->getMemorySize();
   }
   return size;
