@@ -15,8 +15,8 @@ namespace voxblox {
 // Simple concurrent map.
 // Most operations are thread safe, however inserting an element will break all
 // existing iterators.
-// Elements inserted during a rehash may be lost, elements deleted during a
-// rehash may appear back.
+// Most elements inserted during a rehash will be lost, most elements deleted
+// during a rehash will appear back. An ugly issue, with no cheap solution.
 // Each value is returned in a data struct that can be used to lock and unlock
 // the value to ensure thread safe modification. The user is under no obligation
 // to actually use or respect the lock.
@@ -70,8 +70,8 @@ class ConcurrentHashMap {
           data_buckets_(data_buckets) {}
 
     PseudoIterator& operator++() {
-      node_ptr = node_ptr_->next_element while (
-          (node_ptr == nullptr) && (bucket_idx_ < data_buckets_.size())) {
+      node_ptr = node_ptr_->next_element;
+      while ((node_ptr == nullptr) && (bucket_idx_ < data_buckets_.size())) {
         node_ptr_ = data_buckets_[bucket_idx_++].nodePtr();
       }
     }
@@ -249,26 +249,41 @@ class ConcurrentHashMap {
   // the rehash brings this down to 0.25
   // at least a 50% chance of a memory leak if you create data while its running
   void rehash(const size_t min_size = 1) {
-    static constexpr float max_load_factor =
-        0.5f;  // a bit on the low side but blocks are cheap
-    static constexpr float target_load_factor = 0.5f * max_load_factor;
-    static constexpr float inv_target_load_factor = 1.0f / target_load_factor;
-
-    const float load_fator = static_cast<float>(num_elements_) /
-                             static_cast<float>(data_buckets_->size());
+    static constexpr size_t max_inv_load_factor = 2;
+    static constexpr float inv_target_load_factor = 4;
 
     // check if rehash needed
-    if (load_fator > max_load_factor) {
-      size_t new_size = std::max(
-          min_size, static_cast<size_t>(inv_target_load_factor *
-                                        static_cast<float>(num_elements_)));
+    if ((max_inv_load_factor * num_elements_) > data_buckets_.size()) {
       std::shared_ptr<std::vector<std::shared_ptr<Node>>> new_buckets =
-          std::make_shared<std::vector<std::shared_ptr<Node>>>(new_size);
+          std::make_shared<std::vector<std::shared_ptr<Node>>>(
+              inv_target_load_factor * num_elements_);
 
-      Index index = begin();
-      while (index++ != end()) {
-        new_buckets->at(index.data_ptr_->hash % new_buckets->size())
-            .store(index_.data_ptr, std::memory_order_relaxed);
+      for(std::shared_ptr<Bucket>& bucket : data_buckets_){
+
+      std::shared_ptr<Node>& node_ptr = bucket.NodePtr();
+      while ((node_ptr != nullptr) && (bucket_idx_ < data_buckets_.size())) {
+
+        std::shared_ptr<Node>& new_node_ptr =
+            new_buckets->at(node_ptr->hash_ % new_buckets->size()).nodePtr();
+
+        while (new_node_ptr != nullptr) {
+          new_node_ptr = new_node_ptr->next_node_;
+        }
+
+        new_node_ptr = node_ptr;
+
+      }
+
+      PseudoIterator it = begin();
+      while (it++ != end()) {
+        std::shared_ptr<Node> node_ptr =
+            new_buckets->at(it->hash_ % new_buckets->size()).nodePtr();
+
+        while (node_ptr != nullptr) {
+          node_ptr = node_ptr->next_node_;
+        }
+
+        node_ptr = *it;
       }
 
       data_buckets_.swap(new_buckets);
