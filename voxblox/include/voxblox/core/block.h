@@ -1,6 +1,7 @@
 #ifndef VOXBLOX_CORE_BLOCK_H_
 #define VOXBLOX_CORE_BLOCK_H_
 
+#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -159,6 +160,9 @@ class Block {
 
 protected:
   std::unique_ptr<VoxelType[]> voxels_;
+
+  //atomic booleans that can assist in negotiating thread safe access. The caller is under no obligation to actually check or respect the lock. 
+  std::unique_ptr<std::atomic_flags[]> voxel_locks_;
 
   // Derived, cached parameters.
   size_t num_voxels_;

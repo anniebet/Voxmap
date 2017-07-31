@@ -13,16 +13,10 @@
 namespace voxblox {
 
 // Simple concurrent map.
-// Most operations are thread safe, however inserting an element will break all
-// existing iterators.
-// Most elements inserted during a rehash will be lost, most elements deleted
-// during a rehash will appear back. An ugly issue, with no cheap solution.
-// Each value is returned in a data struct that can be used to lock and unlock
-// the value to ensure thread safe modification. The user is under no obligation
-// to actually use or respect the lock.
-// Multiple threads can read existing elements, create new elements and delete
-// elements simultaneously without issues.
-// Under the hood all data is stored using shared pointers that are organized
+// Rehashing is not thread safe, and must be done manually in concurrent use.
+// Check the comments on each function for how thread safe it is.
+// Multiple threads can read existing elements and create new elements simultaneously without issues.
+// Under the hood all data is stored using atomic pointers that are organized
 // into linked lists in an array. Each list has one atomic boolean controlling
 // access for insertion and deletion.
 // The hash rather than the index is used to find if two values are the same,
@@ -30,131 +24,101 @@ namespace voxblox {
 // together.
 //
 template <typename ValueType>
-class ConcurrentHashMap {
+class BaseHashMap {
  public:
-  class Data {
-    pubilc :
-
-        Data(ValueType& value, std::atomic_flag& lock_flag)
-        : value_(value), lock_flag_(lock_flag){};
-
-    ValueType& value() { return value_; }
-
-    void unlock() { lock_flag_.clear(); }
-
-    bool tryToLock() { return !lock_flag_.test_and_set(); }
-
-    // spins until locked
-    void lock() {
-      while (lock_flag_.test_and_set())
-        ;
-    }
-
-   private:
-    ValueType& value_;
-    std::atomic_flag& lock_flag_;
-  };
 
   // should be an stl iterator, but I am lazy.
-  // thread safe... as long as a rehash does not happen.
-  // if a rehash does occur (fellowed by some insert / deletes) things get crazy
-  // ...seriously I drew it out and ++ could move to literally any other element
+  // not thread safe
   class PseudoIterator {
    public:
-    PseudoIterator(const std::shared_ptr<Node>& node_ptr,
+    PseudoIterator(const std::atomic<Node*>& atomic_ptr,
                    const size_t bucket_idx,
-                   const std::shared_ptr<std::vector<std::shared_ptr<Bucket>>>&
+                   const std::shared_ptr<std::vector<Bucket>>&
                        data_buckets)
-        : node_ptr_(node_ptr),
+        : atomic_ptr_(atomic_ptr),
           bucket_idx_(bucket_idx),
           data_buckets_(data_buckets) {}
 
     PseudoIterator& operator++() {
-      node_ptr = node_ptr_->next_element;
-      while ((node_ptr == nullptr) && (bucket_idx_ < data_buckets_.size())) {
-        node_ptr_ = data_buckets_[bucket_idx_++].nodePtr();
+      atomic_ptr_.store(atomic_ptr_.load()->next_element);
+      while ((atomic_ptr_.load() == nullptr) && (bucket_idx_ < data_buckets_.size())) {
+        atomic_ptr_ = data_buckets_[bucket_idx_++].atomicPtr();
       }
     }
 
-    Data& operator*() { return node_ptr_->value; }
+    Data& operator*() { return atomic_ptr_.load()->value; }
 
     bool operator==(const PseudoIterator& other) {
       return (bucket_idx_ == other.bucket_idx_) &&
-             (node_ptr_ == other.node_ptr_);
+             (atomic_ptr_.load() == other.atomic_ptr_.load());
     }
 
    private:
-    std::shared_ptr<Node> node_ptr_;
+    std::atomic<Node*> atomic_ptr_;
     size_t bucket_idx_;
-    std::shared_ptr<std::vector<std::shared_ptr<Bucket>>> data_buckets_;
+    std::shared_ptr<std::vector<std::atomic<Bucket*>>> data_buckets_;
   };
 
-  ConcurrentHashMap() : ConcurrentHashMap(1) {}
+  BaseHashMap() : ConcurrentHashMap(1) {}
 
-  ConcurrentHashMap(size_t num_inital_buckets) {
+  BaseHashMap(size_t num_inital_buckets) {
     // all logic is based on the assumption there is at least 1 bucket
     if (num_inital_buckets == 0) {
       ++num_inital_buckets;
     }
 
-    data_buckets_ = std::make_shared<std::vector<std::shared_ptr<Bucket>>>(
+    data_buckets_ = std::make_shared<std::vector<std::atomic<Bucket*>>>(
         num_inital_buckets);
   }
 
   // thread safe
   bool tryFind(const AnyIndex& index, ValueType* value) const {
     size_t hash;
-    std::shared_ptr<Bucket> bucket;
-    std::shared_ptr<Node> node_ptr;
+    Bucket bucket;
+    std::atomic<Node*>* atomic_ptr_ptr;
 
-    if (getNodePtr(index, &hash, &bucket_ptr, &node_ptr)) {
-      value = &(node_ptr->value_);
+    if(getAtomicPtrPtr(index, &hash, &bucket, &atomic_ptr_ptr)){
+      *value = atomic_ptr_ptr->load()->value_;
       return true;
     } else {
       return false;
     }
   }
 
-  // thread safe
-  bool tryFind(const AnyIndex& index, ValueType& value) const {
-    return tryFind(index, &value);
-  }
-
   // will create element if it does not exist, thread safe
   ValueType& findOrCreate(const AnyIndex& index) {
-    std::shared_ptr<Node> node_ptr;
+    Node* node_ptr;
 
-    getOrCreateDataPtr(index, &node_ptr);
+    getOrCreateDataPtr(index, node_ptr);
 
     return node_ptr->value;
   }
 
-  // thread safe
+  // Only thread safe if no read operation occurs on the same index, or in other words not even slightly thread safe.
   bool erase(const AnyIndex& index) {
     size_t hash = hashFunction(index);
-    std::shared_ptr<Bucket>& bucket_ptr =
-        data_buckets_->at(hash % data_buckets_->size());
+    Bucket& bucket = data_buckets_->at(hash % data_buckets_->size());
 
-    bucket_ptr->lock();
+    bucket.lock();
 
-    std::shared_ptr<Node> prev_node_ptr;
-    std::shared_ptr<Node>& node_ptr = bucket_ptr->nodePtr();
+    Node** prev_node_ptr_ptr;
 
     // iterate through the list in the bucket until at the correct hash or at
     // the end
+    Node*& node_ptr = bucket.atomicPtr().load();
     while (node_ptr != nullptr || node_ptr->hash_ != hash) {
-      prev_node_ptr = node_ptr;
-      node_ptr = node_ptr->next_node_;
+      *prev_node_ptr_ptr = &node_ptr;
+      node_ptr = node_ptr->next_node_.load();
     }
 
     if (node_ptr == nullptr) {
       // nothing to erase
-      bucket_ptr->unlock();
+      bucket.unlock();
       return false;
     }
 
-    if (prev_data_ptr != nullptr) {
-      prev_data_ptr->next_node_ = node_ptr->next_node_;
+    if (*prev_node_ptr_ptr != nullptr) {
+      (*prev_node_ptr_ptr)->next_node_ = node_ptr->next_node_;
     }
 
     --num_elements_;
@@ -178,7 +142,7 @@ class ConcurrentHashMap {
  private:
   class Bucket {
    public:
-    std::shared_ptr<Node>& nodePtr() { return node_ptr_; }
+    std::atomic<Node*>& atomicPtr() { return atomic_ptr_; }
 
     void unlock() { write_lock_flag_.clear(); }
 
@@ -186,12 +150,11 @@ class ConcurrentHashMap {
 
     // spins until locked
     void lock() {
-      while (write_lock_flag_.test_and_set())
-        ;
+      while (write_lock_flag_.test_and_set());
     }
 
    private:
-    std::shared_ptr<Node> node_ptr;
+    std::atomic<Node*> atomic_ptr_;
     std::atomic_flag write_lock_flag_;
   }
 
@@ -201,94 +164,92 @@ class ConcurrentHashMap {
     Node(const size_t hash) : hash_(hash){};
 
     size_t hash_;
-    std::atomic_flag lock_flag_;
     ValueType value_;
-    std::shared_ptr<Node> next_node_;
+    std::atomic<Node*> next_node_;
   };
 
-  // thread safe, though the data can be outdated
-  bool getNodePtr(const AnyIndex& index, size_t* hash,
-                  std::shared_ptr<Bucket>* bucket_ptr,
-                  std::shared_ptr<Node>* node_ptr) const {
+  // thread safe, though it might not return an element that was inserted after it was called 
+  bool getAtomicPtrPtr(const AnyIndex& index, size_t* hash,
+                  Bucket* bucket_ptr,
+                  std::atomic<Node*>** atomic_ptr_ptr_ptr) const {
     *hash = hashFunction(index);
-    *bucket_ptr = data_buckets_->at(hash % data_buckets_->size());
-    *node_ptr = bucket_ptr->nodePtr();
+    *bucket_ptr = &(data_buckets_->at(hash % data_buckets_->size()));
+    *atomic_ptr_ptr_ptr = &(bucket_ptr->atomicPtr());
 
     // iterate through the list in the bucket until at the correct hash or at
     // the end
-    while (*node_ptr != nullptr || (*node_ptr)->hash_ != *hash) {
-      *node_ptr = (*node_ptr)->next_node_;
+    Node* node_ptr = (*atomic_ptr_ptr_ptr)->load();
+    while (node_ptr != nullptr || node_ptr->hash_ != *hash) {
+      *atomic_ptr_ptr_ptr = &(node_ptr->next_node_);
+      node_ptr = (*atomic_ptr_ptr_ptr)->load();
     }
 
-    return *node_ptr != nullptr
+    return node_ptr != nullptr
   }
 
-  // if the data does not exist it will be created, thread safe
-  void getOrCreateNodePtr(const AnyIndex& index,
-                          std::shared_ptr<Node>* node_ptr) {
+  // if the data does not exist it will be created
+  // thread safe with one caveat, see autoRehash()
+  void getOrCreateNode(const AnyIndex& index,
+                          Node* node_ptr) {
     size_t hash;
-    std::shared_ptr<Bucket> bucket_ptr;
+    Bucket bucket;
+    std::atomic<Node*>* atomic_ptr;
 
-    if (!getDataPtr(index, &hash, &bucket_ptr, node_ptr)) {
+    if (!getDataPtr(index, &hash, &bucket, &atomic_ptr)) {
       // the data does not exist so we are going to create and add it
 
       // get exclusive write access to list
       bucket_ptr.lock();
 
-      *node_ptr = std::make_shared<Node>(hash);
+      // reload atomic to make sure its still unallocated
+      node_ptr = atomic_ptr->load();
 
-      ++num_elements_;
+      //if true no other thread wrote it while we were getting ready to write it
+      if(node_ptr == nullptr){
+        atomic_ptr->store(new Node(hash));
+        ++num_elements_;
+
+        //this destroys all thread safety (without adding expensive locks), and so is a no-op on the concurrent version
+        autoRehash();
+      }
 
       bucket_ptr.unlock();
-
-      rehash();
     }
   }
 
   // rehashes if the average elements per bucket is over 0.5
   // the rehash brings this down to 0.25
-  // at least a 50% chance of a memory leak if you create data while its running
+  // super not thread safe, will almost certainly cause memory leaks and segfaults if any other operation happens while it is running
   void rehash(const size_t min_size = 1) {
     static constexpr size_t max_inv_load_factor = 2;
     static constexpr float inv_target_load_factor = 4;
 
     // check if rehash needed
     if ((max_inv_load_factor * num_elements_) > data_buckets_.size()) {
-      std::shared_ptr<std::vector<std::shared_ptr<Node>>> new_buckets =
-          std::make_shared<std::vector<std::shared_ptr<Node>>>(
-              inv_target_load_factor * num_elements_);
+      std::shared_ptr<std::vector<std::atomic<Bucket>>> new_buckets =
+          std::make_shared<std::vector<std::atomic<Bucket>>>(
+              std::max(min_size, inv_target_load_factor * num_elements_));
 
-      for(std::shared_ptr<Bucket>& bucket : data_buckets_){
+      for(Bucket& bucket : data_buckets_){
 
-      std::shared_ptr<Node>& node_ptr = bucket.NodePtr();
+        Node*& node_ptr = bucket.atomicPtr().load();
       while ((node_ptr != nullptr) && (bucket_idx_ < data_buckets_.size())) {
 
-        std::shared_ptr<Node>& new_node_ptr =
-            new_buckets->at(node_ptr->hash_ % new_buckets->size()).nodePtr();
+        Node*& new_node_ptr = new_buckets->at(node_ptr->hash_ % new_buckets->size()).atomicPtr().load();
 
         while (new_node_ptr != nullptr) {
-          new_node_ptr = new_node_ptr->next_node_;
+          new_node_ptr = new_node_ptr->next_node_.load();
         }
 
         new_node_ptr = node_ptr;
 
       }
 
-      PseudoIterator it = begin();
-      while (it++ != end()) {
-        std::shared_ptr<Node> node_ptr =
-            new_buckets->at(it->hash_ % new_buckets->size()).nodePtr();
-
-        while (node_ptr != nullptr) {
-          node_ptr = node_ptr->next_node_;
-        }
-
-        node_ptr = *it;
-      }
-
       data_buckets_.swap(new_buckets);
     }
   }
+
+  void autoRehash(){ rehash()};
 
   const size_t static inline hashFunction(const BlockIndex& index) {
     static constexpr size_t prime1 = 73856093;
@@ -300,7 +261,7 @@ class ConcurrentHashMap {
   }
 
   std::atomic<size_t> num_elements_;
-  std::shared_ptr<std::vector<std::shared_ptr<Bucket>>> data_buckets_;
+  std::shared_ptr<std::vector<std::atomic<Bucket>>> data_buckets_;
 };
 
 struct BlockIndexHash {
@@ -324,7 +285,7 @@ struct BlockHashMapType {
 
 template <typename ValueType>
 struct BlockHashMapType {
-  typedef ConcurrentHashMap<ValueType> type;
+  typedef BaseHashMap<ValueType> type;
 };
 
 typedef std::unordered_set<AnyIndex, BlockIndexHash, std::equal_to<AnyIndex>,
