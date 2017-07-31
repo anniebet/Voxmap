@@ -104,8 +104,6 @@ unsigned int EsdfMap::coordPlaneSliceGetDistance(
     unsigned int free_plane_index, double free_plane_val,
     EigenDRef<Eigen::Matrix<double, 3, Eigen::Dynamic>>& positions,
     Eigen::Ref<Eigen::VectorXd> distances) const {
-  BlockIndexList blocks;
-  esdf_layer_->getAllAllocatedBlocks(&blocks);
 
   // Cache layer settings.
   size_t vps = esdf_layer_->voxels_per_side();
@@ -116,10 +114,10 @@ unsigned int EsdfMap::coordPlaneSliceGetDistance(
   unsigned int count = 0;
 
   // Iterate over all blocks.
-  for (const BlockIndex& index : blocks) {
+  for (const Block<EsdfVoxel>& block : *(esdf_layer_->getBlockMap())) {
     // Iterate over all voxels in said blocks.
-    const Block<EsdfVoxel>& block = esdf_layer_->getBlockByIndex(index);
-
+    
+    
     Point origin = block.origin();
     if (std::abs(origin(free_plane_index) - free_plane_val) >
         block.block_size()) {

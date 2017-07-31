@@ -37,9 +37,10 @@ void EsdfIntegrator::getSphereAroundPoint(
           BlockIndex block_index =
               esdf_layer_->computeBlockIndexFromCoordinates(point);
 
-          (*block_voxel_list)[block_index].push_back(
-              esdf_layer_->allocateBlockPtrByIndex(block_index)
-                  ->computeVoxelIndexFromCoordinates(point));
+          block_voxel_list->findOrCreate(block_index)
+              .push_back(std::make_pair(
+                  block_index, esdf_layer_->allocateBlockPtrByIndex(block_index)
+                                   ->computeVoxelIndexFromCoordinates(point)));
         }
       }
     }
@@ -55,44 +56,44 @@ void EsdfIntegrator::addNewRobotPosition(const Point& position) {
   BlockVoxelListMap block_voxel_list;
   getSphereAroundPoint(position, config_.clear_sphere_radius,
                        &block_voxel_list);
-  for (const std::pair<BlockIndex, VoxelIndexList>& kv : block_voxel_list) {
+  for (const GlobalIndexList& kv : block_voxel_list) {
+    for(const std::pair<BlockIndex, VoxelIndex> index : kv){
     // Get block.
     Block<EsdfVoxel>::Ptr block_ptr =
-        esdf_layer_->allocateBlockPtrByIndex(kv.first);
+        esdf_layer_->allocateBlockPtrByIndex(index.first);
 
-    for (const VoxelIndex& voxel_index : kv.second) {
-      if (!block_ptr->isValidVoxelIndex(voxel_index)) {
-        continue;
-      }
-      EsdfVoxel& esdf_voxel = block_ptr->getVoxelByVoxelIndex(voxel_index);
-      if (!esdf_voxel.observed) {
-        esdf_voxel.distance = config_.default_distance_m;
-        esdf_voxel.observed = true;
-        pushNeighborsToOpen(kv.first, voxel_index);
-        updated_blocks_.insert(kv.first);
-      }
+    if (!block_ptr->isValidVoxelIndex(index.second)) {
+      continue;
     }
+    EsdfVoxel& esdf_voxel = block_ptr->getVoxelByVoxelIndex(index.second);
+    if (!esdf_voxel.observed) {
+      esdf_voxel.distance = config_.default_distance_m;
+      esdf_voxel.observed = true;
+      pushNeighborsToOpen(index.first, index.second);
+      updated_blocks_.insert(index.first);
+    }
+  }
   }
 
   // Second set all remaining unknown to occupied.
   block_voxel_list.clear();
   getSphereAroundPoint(position, config_.occupied_sphere_radius,
                        &block_voxel_list);
-  for (const std::pair<BlockIndex, VoxelIndexList>& kv : block_voxel_list) {
+  for (const GlobalIndexList& kv : block_voxel_list) {
+    for(const std::pair<BlockIndex, VoxelIndex> index : kv){
     // Get block.
     Block<EsdfVoxel>::Ptr block_ptr =
-        esdf_layer_->allocateBlockPtrByIndex(kv.first);
+        esdf_layer_->allocateBlockPtrByIndex(index.first);
 
-    for (const VoxelIndex& voxel_index : kv.second) {
-      EsdfVoxel& esdf_voxel = block_ptr->getVoxelByVoxelIndex(voxel_index);
-      if (!esdf_voxel.observed) {
-        esdf_voxel.distance = -config_.default_distance_m;
-        esdf_voxel.observed = true;
-        pushNeighborsToOpen(kv.first, voxel_index);
-        updated_blocks_.insert(kv.first);
-      }
+    EsdfVoxel& esdf_voxel = block_ptr->getVoxelByVoxelIndex(index.second);
+    if (!esdf_voxel.observed) {
+      esdf_voxel.distance = -config_.default_distance_m;
+      esdf_voxel.observed = true;
+      pushNeighborsToOpen(index.first, index.second);
+      updated_blocks_.insert(index.first);
     }
   }
+}
   VLOG(3) << "Changed " << updated_blocks_.size()
           << " blocks from unknown to free or occupied near the robot.";
   clear_timer.Stop();

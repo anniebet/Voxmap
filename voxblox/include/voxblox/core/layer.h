@@ -62,12 +62,14 @@ class Layer {
   inline typename BlockType::ConstPtr getBlockPtrByIndex(
       const BlockIndex& index) const {
     typename BlockType::Ptr block_ptr;
-    block_map_.tryFind(index, &block_ptr) return block_ptr;
+    block_map_.tryFind(index, &block_ptr);
+    return block_ptr;
   }
 
   inline typename BlockType::Ptr getBlockPtrByIndex(const BlockIndex& index) {
     typename BlockType::Ptr block_ptr;
-    block_map_.tryFind(index, &block_ptr) return block_ptr;
+    block_map_.tryFind(index, &block_ptr);
+    return block_ptr;
   }
 
   // Gets a block by the block index it if already exists,
@@ -147,6 +149,8 @@ class Layer {
       }
     }
   }*/
+
+  const BlockHashMap& getBlockMap() const { return block_map_; }
 
   size_t getNumberOfAllocatedBlocks() const { return block_map_.size(); }
 

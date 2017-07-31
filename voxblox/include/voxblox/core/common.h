@@ -31,6 +31,10 @@ typedef std::vector<AnyIndex, Eigen::aligned_allocator<AnyIndex>> IndexVector;
 typedef IndexVector BlockIndexList;
 typedef IndexVector VoxelIndexList;
 
+typedef std::vector<std::pair<BlockIndex, VoxelIndex>,
+                    Eigen::aligned_allocator<std::pair<BlockIndex, VoxelIndex>>>
+    GlobalIndexList;
+
 struct Color;
 typedef uint32_t Label;
 
