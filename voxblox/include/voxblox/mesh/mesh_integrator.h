@@ -68,11 +68,9 @@ class MeshIntegrator {
   void generateWholeMesh() {
     mesh_layer_->clear();
     // Get all of the blocks in the TSDF layer, and mesh each one.
-    BlockIndexList all_tsdf_blocks;
-    tsdf_layer_->getAllAllocatedBlocks(&all_tsdf_blocks);
-
-    for (const BlockIndex& block_index : all_tsdf_blocks) {
-      updateMeshForBlock(block_index);
+    for (const typename Block<VoxelType>::Ptr& block :
+         tsdf_layer_->getBlockMap()) {
+      updateMeshForBlock(block->block_index());
     }
   }
 
@@ -80,22 +78,23 @@ class MeshIntegrator {
     // Only update parts of the mesh for blocks that have updated.
     // clear_updated_flag decides whether to reset 'updated' after updating the
     // mesh.
-    BlockIndexList all_tsdf_blocks;
-    tsdf_layer_->getAllAllocatedBlocks(&all_tsdf_blocks);
-
-    for (const BlockIndex& block_index : all_tsdf_blocks) {
-      typename Block<VoxelType>::Ptr block =
-          tsdf_layer_->getBlockPtrByIndex(block_index);
+    for (const typename Block<VoxelType>::Ptr& block :
+         tsdf_layer_->getBlockMap()) {
+      ROS_ERROR("a");
       if (block->updated()) {
-        updateMeshForBlock(block_index);
+        ROS_ERROR("d");
+        updateMeshForBlock(block->block_index());
         if (clear_updated_flag) {
           block->updated() = false;
         }
       }
+      ROS_ERROR("c");
     }
+    ROS_ERROR("b");
   }
 
-  void extractBlockMesh(typename Block<VoxelType>::ConstPtr block, Mesh::Ptr mesh) {
+  void extractBlockMesh(typename Block<VoxelType>::ConstPtr block,
+                        Mesh::Ptr mesh) {
     size_t vps = block->voxels_per_side();
     VertexIndex next_mesh_index = 0;
 

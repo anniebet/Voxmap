@@ -488,7 +488,7 @@ class FastTsdfIntegrator : public TsdfIntegrator {
   void integrator(const Transformation& T_G_C, const Pointcloud& points_C,
                   const Colors& colors, const size_t start_idx,
                   const size_t end_idx,
-                  std::vector<std::atomic_flag*>* updated_voxels) {
+                  std::vector<SafeVoxel<TsdfVoxel>>* updated_voxels) {
     DCHECK_EQ(points_C.size(), colors.size());
 
     const Point& origin = T_G_C.getPosition();
@@ -534,28 +534,28 @@ class FastTsdfIntegrator : public TsdfIntegrator {
             getLocalFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_);
 
         if (!block || block_idx != last_block_idx) {
-          block = layer_->allocateBlockPtrByIndex(index);
+          block = layer_->allocateBlockPtrByIndex(block_idx);
 
-          tsdf_block->updated() = true;
+          block->updated() = true;
           last_block_idx = block_idx;
         }
 
-        updated_voxels->emplace_back(getSafeVoxelByVoxelIndex(local_voxel_idx));
+        updated_voxels->emplace_back(block->getSafeVoxelByVoxelIndex(local_voxel_idx));
 
-        if(!updated_voxels.back().tryToLock()){
-          updated_voxels.pop_back();
+        if(!updated_voxels->back().tryToLock()){
+          updated_voxels->pop_back();
           break;
         }
 
         const Point voxel_center_G =
-            tsdf_block->computeCoordinatesFromVoxelIndex(local_voxel_idx);
-        TsdfVoxel& tsdf_voxel =
-            tsdf_block->getVoxelByVoxelIndex(local_voxel_idx);
+            block->computeCoordinatesFromVoxelIndex(local_voxel_idx);
+        TsdfVoxel& voxel =
+            block->getVoxelByVoxelIndex(local_voxel_idx);
 
         const float weight = getVoxelWeight(point_C);
 
         updateTsdfVoxel(origin, point_G, voxel_center_G, color,
-                        truncation_distance, weight, &tsdf_voxel);
+                        truncation_distance, weight, &voxel);
       }
     }
   }
@@ -580,7 +580,7 @@ class FastTsdfIntegrator : public TsdfIntegrator {
 
     size_t start_idx = 0;
 
-    std::vector<std::vector<std::atomic_flag*>> updated_voxels;
+    std::vector<std::vector<SafeVoxel<TsdfVoxel>>> updated_voxels;
     updated_voxels.resize(config_.integrator_threads);
 
     std::vector<std::thread> integrator_threads;

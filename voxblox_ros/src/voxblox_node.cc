@@ -283,7 +283,7 @@ VoxbloxNode::VoxbloxNode(const ros::NodeHandle& nh,
       static_cast<float>(truncation_distance);
   integrator_config.max_weight = static_cast<float>(max_weight);
 
-  std::string method("merged");
+  /*std::string method("merged");
   nh_private_.param("method", method, method);
   if (method.compare("simple") == 0) {
     tsdf_integrator_.reset(new SimpleTsdfIntegrator(
@@ -302,7 +302,9 @@ VoxbloxNode::VoxbloxNode(const ros::NodeHandle& nh,
   } else {
     tsdf_integrator_.reset(new SimpleTsdfIntegrator(
         integrator_config, tsdf_map_->getTsdfLayerPtr()));
-  }
+  }*/
+  tsdf_integrator_.reset(new FastTsdfIntegrator(
+        integrator_config, tsdf_map_->getTsdfLayerPtr()));
 
   // ESDF settings.
   if (generate_esdf_) {
@@ -796,15 +798,17 @@ void VoxbloxNode::updateMeshEvent(const ros::TimerEvent& e) {
     ROS_INFO("Updating mesh.");
   }
   // TODO(helenol): also update the ESDF layer each time you update the mesh.
-  if (generate_esdf_) {
+  /*if (generate_esdf_) {
     const bool clear_updated_flag_esdf = false;
     esdf_integrator_->updateFromTsdfLayer(clear_updated_flag_esdf);
     publishAllUpdatedEsdfVoxels();
-  }
+  }*/
 
   timing::Timer generate_mesh_timer("mesh/update");
   const bool clear_updated_flag = true;
+  ROS_ERROR("A");
   mesh_integrator_->generateMeshForUpdatedBlocks(clear_updated_flag);
+  ROS_ERROR("B");
   generate_mesh_timer.Stop();
 
   // TODO(helenol): also think about how to update markers incrementally?

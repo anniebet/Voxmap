@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <functional>
+#include <iostream>
 #include <unordered_map>
 #include <vector>
 
@@ -30,7 +31,7 @@ class BaseHashMap {
   struct Node {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    Node(const size_t hash) : hash_(hash){};
+    Node(const size_t hash) : hash_(hash), next_node_(nullptr) {};
 
     Node(const Node& other)
         : hash_(other.hash_),
@@ -51,7 +52,7 @@ class BaseHashMap {
 
   class Bucket {
    public:
-    Bucket() { write_lock_flag_.clear(); }
+    Bucket(): atomic_ptr_(nullptr) { write_lock_flag_.clear(); }
 
     Bucket(const Bucket& other) : atomic_ptr_(other.atomic_ptr_.load()) {
       write_lock_flag_.clear();
@@ -87,51 +88,51 @@ class BaseHashMap {
   // not thread safe
   class PseudoIterator {
    public:
-    PseudoIterator(const std::atomic<BaseHashMap<ValueType>::Node*>& atomic_ptr,
+    PseudoIterator(BaseHashMap<ValueType>::Node* node_ptr,
                    const size_t bucket_idx,
                    const std::shared_ptr<std::vector<Bucket>>& data_buckets)
-        : bucket_idx_(bucket_idx), data_buckets_(data_buckets) {
-      atomic_ptr_.store(atomic_ptr.load());
-    }
+        : node_ptr_(node_ptr),
+          bucket_idx_(bucket_idx),
+          data_buckets_(data_buckets) {}
 
     PseudoIterator& operator++() {
-      atomic_ptr_.store(atomic_ptr_.load()->next_node_);
-      while ((atomic_ptr_.load() == nullptr) &&
-             (bucket_idx_ < data_buckets_->size())) {
-        atomic_ptr_.store(data_buckets_->at(bucket_idx_++).atomicPtr().load());
+      node_ptr_ = node_ptr_->next_node_.load();
+      while ((node_ptr_ == nullptr) &&
+             ((++bucket_idx_) < data_buckets_->size())) {
+        node_ptr_ = data_buckets_->at(bucket_idx_).atomicPtr().load();
       }
     }
 
     PseudoIterator(const PseudoIterator& other)
-        : atomic_ptr_(other.atomic_ptr_.load()),
+        : node_ptr_(other.node_ptr_),
           bucket_idx_(other.bucket_idx_),
           data_buckets_(other.data_buckets_) {}
 
-    ValueType& operator*() { return atomic_ptr_.load()->value_; }
+    ValueType& operator*() const { return node_ptr_->value_; }
 
     bool operator==(const PseudoIterator& other) {
       return (bucket_idx_ == other.bucket_idx_) &&
-             (atomic_ptr_.load() == other.atomic_ptr_.load());
+             (node_ptr_ == other.node_ptr_);
     }
 
     bool operator!=(const PseudoIterator& other) { return !(*this == other); }
 
     PseudoIterator& operator=(const PseudoIterator& other) {
-      atomic_ptr_.store(other.atomic_ptr_.load());
+      node_ptr_ = other.node_ptr_;
       bucket_idx_ = other.bucket_idx_;
       data_buckets_ = other.data_buckets_;
       return *this;
     }
 
    private:
-    std::atomic<BaseHashMap<ValueType>::Node*> atomic_ptr_;
+    BaseHashMap<ValueType>::Node* node_ptr_;
     size_t bucket_idx_;
     std::shared_ptr<std::vector<Bucket>> data_buckets_;
   };
 
   BaseHashMap() : BaseHashMap(1) {}
 
-  BaseHashMap(size_t num_inital_buckets) {
+  BaseHashMap(size_t num_inital_buckets): num_elements_(0) {
     // all logic is based on the assumption there is at least 1 bucket
     if (num_inital_buckets == 0) {
       ++num_inital_buckets;
@@ -190,7 +191,7 @@ class BaseHashMap {
 
     bucket.lock();
 
-    Node* prev_node_ptr;
+    Node* prev_node_ptr = nullptr;
 
     // iterate through the list in the bucket until at the correct hash or at
     // the end
@@ -244,11 +245,19 @@ class BaseHashMap {
   }
 
   PseudoIterator begin() const {
-    PseudoIterator it(nullptr, 0, data_buckets_);
-    return ++it;
+    size_t bucket_idx = 0;
+    Node* node_ptr = data_buckets_->at(bucket_idx).atomicPtr().load();
+
+    while ((node_ptr == nullptr) && ((++bucket_idx) < data_buckets_->size())) {
+      node_ptr = data_buckets_->at(bucket_idx).atomicPtr().load();
+    }
+    std::cerr << "node_ptr " << node_ptr << std::endl;
+    std::cerr << "bucket_idx " << bucket_idx << std::endl;
+    return PseudoIterator(node_ptr, bucket_idx, data_buckets_);
   }
 
   PseudoIterator end() const {
+    std::cerr << "bucket_end " << data_buckets_->size() << std::endl;
     return PseudoIterator(nullptr, data_buckets_->size(), nullptr);
   }
 

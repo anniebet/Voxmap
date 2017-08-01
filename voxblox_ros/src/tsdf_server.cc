@@ -84,7 +84,7 @@ TsdfServer::TsdfServer(const ros::NodeHandle& nh,
 
   std::string method("merged");
   nh_private_.param("method", method, method);
-  if (method.compare("simple") == 0) {
+  /*if (method.compare("simple") == 0) {
     tsdf_integrator_.reset(new SimpleTsdfIntegrator(
         integrator_config, tsdf_map_->getTsdfLayerPtr()));
   } else if (method.compare("merged") == 0) {
@@ -101,7 +101,9 @@ TsdfServer::TsdfServer(const ros::NodeHandle& nh,
   } else {
     tsdf_integrator_.reset(new SimpleTsdfIntegrator(
         integrator_config, tsdf_map_->getTsdfLayerPtr()));
-  }
+  }*/
+  tsdf_integrator_.reset(new FastTsdfIntegrator(
+        integrator_config, tsdf_map_->getTsdfLayerPtr()));
 
   // Mesh settings.
   nh_private_.param("mesh_filename", mesh_filename_, mesh_filename_);

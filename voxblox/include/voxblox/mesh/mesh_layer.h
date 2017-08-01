@@ -106,6 +106,8 @@ class MeshLayer {
     mesh_map_.erase(computeBlockIndexFromCoordinates(coords));
   }
 
+  const MeshMap& getMeshMap() const { return mesh_map_; }
+
   void combineMesh(Mesh::Ptr combined_mesh) const {
     // Used to prevent double ups in vertices
     BlockHashMapType<IndexElement>::type uniques;

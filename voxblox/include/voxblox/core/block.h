@@ -7,6 +7,7 @@
 
 #include "./Block.pb.h"
 #include "voxblox/core/common.h"
+#include "voxblox/core/voxel.h"
 
 namespace voxblox {
 
@@ -33,7 +34,7 @@ class Block {
 
     // atomic flags don't zero initialize
     for (size_t i = 0; i < num_voxels_; ++i) {
-      voxel_locks_.clear();
+      voxel_locks_.get()[i].clear();
     }
   }
 
@@ -121,23 +122,23 @@ class Block {
   // Locks for ensuring safety during concurrent operations (must be manually
   // locked, and unlocked, can be ignored if you are unconcerned with thread
   // safety)
-  inline SafeVoxel<VoxelType>& getSafeVoxelByLinearIndex(size_t index) {
+  inline SafeVoxel<VoxelType> getSafeVoxelByLinearIndex(size_t index) {
     DCHECK_LT(index, num_voxels_);
 
     return SafeVoxel<VoxelType>(voxels_[index], voxel_locks_[index]);
   }
 
-  inline SafeVoxel<VoxelType>& getSafeVoxelByVoxelIndex(
+  inline SafeVoxel<VoxelType> getSafeVoxelByVoxelIndex(
       const VoxelIndex& index) {
-    size_t linear_index =
-        computeLinearIndexFromVoxelIndex(index) return SafeVoxel<VoxelType>(
-            voxels_[linear_index], voxel_locks_[linear_index]);
+    size_t linear_index = computeLinearIndexFromVoxelIndex(index);
+    return SafeVoxel<VoxelType>(voxels_[linear_index],
+                                voxel_locks_[linear_index]);
   }
 
-  inline SafeVoxel<VoxelType>& getSafeVoxelByCoordinates(const Point& coords) {
-    size_t linear_index =
-        computeLinearIndexFromCoordinates(coords) return SafeVoxel<VoxelType>(
-            voxels_[linear_index], voxel_locks_[linear_index]);
+  inline SafeVoxel<VoxelType> getSafeVoxelByCoordinates(const Point& coords) {
+    size_t linear_index = computeLinearIndexFromCoordinates(coords);
+    return SafeVoxel<VoxelType>(voxels_[linear_index],
+                                voxel_locks_[linear_index]);
   }
 
   inline bool isValidVoxelIndex(const VoxelIndex& index) const {

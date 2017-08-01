@@ -113,11 +113,7 @@ inline void fillMarkerWithMesh(const MeshLayer::ConstPtr& mesh_layer,
   marker->pose.orientation.w = 1;
   marker->type = visualization_msgs::Marker::TRIANGLE_LIST;
 
-  BlockIndexList mesh_indices;
-  mesh_layer->getAllAllocatedMeshes(&mesh_indices);
-
-  for (const BlockIndex& block_index : mesh_indices) {
-    Mesh::ConstPtr mesh = mesh_layer->getMeshPtrByIndex(block_index);
+  for (Mesh::ConstPtr mesh : mesh_layer->getMeshMap()) {
 
     if (!mesh->hasVertices()) {
       continue;
@@ -169,11 +165,7 @@ inline void fillPointcloudWithMesh(
   CHECK_NOTNULL(pointcloud);
   pointcloud->clear();
 
-  BlockIndexList mesh_indices;
-  mesh_layer->getAllAllocatedMeshes(&mesh_indices);
-
-  for (const BlockIndex& block_index : mesh_indices) {
-    Mesh::ConstPtr mesh = mesh_layer->getMeshPtrByIndex(block_index);
+  for (Mesh::ConstPtr mesh : mesh_layer->getMeshMap()) {
 
     if (!mesh->hasVertices()) {
       continue;

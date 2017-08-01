@@ -19,31 +19,31 @@ cs_add_library(${PROJECT_NAME}
 # BINARIES #
 ############
 
-cs_add_executable(voxblox_eval
-  src/voxblox_eval.cc
-)
-target_link_libraries(voxblox_eval ${PROJECT_NAME})
+#cs_add_executable(voxblox_eval
+#  src/voxblox_eval.cc
+#)
+#target_link_libraries(voxblox_eval ${PROJECT_NAME})
 
 cs_add_executable(voxblox_node
   src/voxblox_node.cc
 )
 target_link_libraries(voxblox_node ${PROJECT_NAME})
 
-cs_add_executable(tsdf_server
-  src/tsdf_server_node.cc
-)
-target_link_libraries(tsdf_server ${PROJECT_NAME})
+#cs_add_executable(tsdf_server
+#  src/tsdf_server_node.cc
+#)
+#target_link_libraries(tsdf_server ${PROJECT_NAME})
 
-cs_add_executable(esdf_server
-  src/esdf_server_node.cc
-)
-target_link_libraries(esdf_server ${PROJECT_NAME})
+#cs_add_executable(esdf_server
+#  src/esdf_server_node.cc
+#)
+#target_link_libraries(esdf_server ${PROJECT_NAME})
 
 
-cs_add_executable(simulation_eval
-  src/simulation_eval.cc
-)
-target_link_libraries(simulation_eval ${PROJECT_NAME})
+#cs_add_executable(simulation_eval
+#  src/simulation_eval.cc
+#)
+#target_link_libraries(simulation_eval ${PROJECT_NAME})
 
 ##########
 # EXPORT #

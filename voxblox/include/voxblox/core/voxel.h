@@ -60,7 +60,7 @@ inline std::string getVoxelType<OccupancyVoxel>() {
 }
 
 // packages voxel with atomic flag for negotiating concurrent access
-template <VoxelType>
+template <typename VoxelType>
 class SafeVoxel {
  public:
   SafeVoxel(VoxelType& voxel, std::atomic_flag& write_lock_flag)

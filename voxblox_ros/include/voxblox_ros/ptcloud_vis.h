@@ -51,8 +51,6 @@ void createColorPointcloudFromLayer(
     pcl::PointCloud<pcl::PointXYZRGB>* pointcloud) {
   CHECK_NOTNULL(pointcloud);
   pointcloud->clear();
-  BlockIndexList blocks;
-  layer.getAllAllocatedBlocks(&blocks);
 
   // Cache layer settings.
   size_t vps = layer.voxels_per_side();
@@ -61,14 +59,12 @@ void createColorPointcloudFromLayer(
   // Temp variables.
   Color color;
   // Iterate over all blocks.
-  for (const BlockIndex& index : blocks) {
+  for (const typename Block<VoxelType>::Ptr& block : layer.getBlockMap()) {
     // Iterate over all voxels in said blocks.
-    const Block<VoxelType>& block = layer.getBlockByIndex(index);
-
     for (size_t linear_index = 0; linear_index < num_voxels_per_block;
          ++linear_index) {
-      Point coord = block.computeCoordinatesFromLinearIndex(linear_index);
-      if (vis_function(block.getVoxelByLinearIndex(linear_index), coord,
+      Point coord = block->computeCoordinatesFromLinearIndex(linear_index);
+      if (vis_function(block->getVoxelByLinearIndex(linear_index), coord,
                        &color)) {
         pcl::PointXYZRGB point;
         point.x = coord.x();
@@ -91,8 +87,6 @@ void createColorPointcloudFromLayer(
     pcl::PointCloud<pcl::PointXYZI>* pointcloud) {
   CHECK_NOTNULL(pointcloud);
   pointcloud->clear();
-  BlockIndexList blocks;
-  layer.getAllAllocatedBlocks(&blocks);
 
   // Cache layer settings.
   size_t vps = layer.voxels_per_side();
@@ -101,14 +95,13 @@ void createColorPointcloudFromLayer(
   // Temp variables.
   double intensity = 0.0;
   // Iterate over all blocks.
-  for (const BlockIndex& index : blocks) {
+  for (const typename Block<VoxelType>::Ptr& block : layer.getBlockMap()) {
     // Iterate over all voxels in said blocks.
-    const Block<VoxelType>& block = layer.getBlockByIndex(index);
 
     for (size_t linear_index = 0; linear_index < num_voxels_per_block;
          ++linear_index) {
-      Point coord = block.computeCoordinatesFromLinearIndex(linear_index);
-      if (vis_function(block.getVoxelByLinearIndex(linear_index), coord,
+      Point coord = block->computeCoordinatesFromLinearIndex(linear_index);
+      if (vis_function(block->getVoxelByLinearIndex(linear_index), coord,
                        &intensity)) {
         pcl::PointXYZI point;
         point.x = coord.x();
@@ -142,16 +135,13 @@ void createOccupancyBlocksFromLayer(
       voxel_size;
   block_marker.action = visualization_msgs::Marker::ADD;
 
-  BlockIndexList blocks;
-  layer.getAllAllocatedBlocks(&blocks);
-  for (const BlockIndex& index : blocks) {
+  for (const typename Block<VoxelType>::Ptr& block : layer.getBlockMap()) {
     // Iterate over all voxels in said blocks.
-    const Block<VoxelType>& block = layer.getBlockByIndex(index);
 
     for (size_t linear_index = 0; linear_index < num_voxels_per_block;
          ++linear_index) {
-      Point coord = block.computeCoordinatesFromLinearIndex(linear_index);
-      if (vis_function(block.getVoxelByLinearIndex(linear_index), coord)) {
+      Point coord = block->computeCoordinatesFromLinearIndex(linear_index);
+      if (vis_function(block->getVoxelByLinearIndex(linear_index), coord)) {
         geometry_msgs::Point cube_center;
         cube_center.x = coord.x();
         cube_center.y = coord.y();

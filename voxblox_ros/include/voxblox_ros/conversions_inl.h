@@ -8,7 +8,7 @@ namespace voxblox {
 template <typename VoxelType>
 void serializeLayerAsMsg(const Layer<VoxelType>& layer, bool only_updated,
                          voxblox_msgs::Layer* msg) {
-  CHECK_NOTNULL(msg);
+  /*CHECK_NOTNULL(msg);
   msg->voxels_per_side = layer.voxels_per_side();
   msg->voxel_size = layer.voxel_size();
 
@@ -35,13 +35,13 @@ void serializeLayerAsMsg(const Layer<VoxelType>& layer, bool only_updated,
 
     block_msg.data = data;
     msg->blocks.push_back(block_msg);
-  }
+  }*/
 }
 
 template <typename VoxelType>
 bool deserializeMsgToLayer(const voxblox_msgs::Layer& msg,
                            Layer<VoxelType>* layer) {
-  CHECK_NOTNULL(layer);
+  /*CHECK_NOTNULL(layer);
   if (getVoxelType<VoxelType>().compare(msg.layer_type) != 0) {
     return false;
   }
@@ -65,7 +65,7 @@ bool deserializeMsgToLayer(const voxblox_msgs::Layer& msg,
 
     std::vector<uint32_t> data = block_msg.data;
     block_ptr->deserializeFromIntegers(data);
-  }
+  }*/
 
   return true;
 }
