@@ -269,11 +269,14 @@ class BaseHashMap {
     // iterate through the list in the bucket until at the correct hash or at
     // the end
     Node* node_ptr = (*atomic_ptr_ptr_ptr)->load();
+    std::cerr << "looking" << std::endl;
     while ((node_ptr != nullptr) && (node_ptr->hash_ != *hash)) {
+      std::cerr << "in list" << std::endl;
       *atomic_ptr_ptr_ptr = &(node_ptr->next_node_);
       node_ptr = (*atomic_ptr_ptr_ptr)->load();
     }
 
+    std::cerr << "returning " << std::endl;
     return node_ptr != nullptr;
   }
 
@@ -289,10 +292,11 @@ class BaseHashMap {
       return false;
     } else {
       // the data does not exist so we are going to create and add it
-
+      std::cerr << "writing" << std::endl;
       // get exclusive write access to list
       bucket_ptr->lock();
 
+      std::cerr << "lock and load" << std::endl;
       // reload atomic to make sure its still unallocated
       *node_ptr_ptr = atomic_ptr_ptr->load();
       if (*node_ptr_ptr != nullptr) {
@@ -305,9 +309,13 @@ class BaseHashMap {
       *node_ptr_ptr = atomic_ptr_ptr->load();
       ++num_elements_;
 
+      std::cerr << "ready to rehash" << std::endl;
+
       // this destroys all thread safety (without adding expensive locks), and
       // so is a no-op on the concurrent version
       autoRehash();
+
+      std::cerr << "unlocking" << std::endl;
 
       bucket_ptr->unlock();
 
