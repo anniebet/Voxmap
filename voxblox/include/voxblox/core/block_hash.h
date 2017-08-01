@@ -168,7 +168,7 @@ class BaseHashMap {
   ValueType& findOrCreate(const AnyIndex& index, bool* was_created) {
     Node* node_ptr;
 
-    *was_created = getOrCreateNode(index, node_ptr);
+    *was_created = getOrCreateNode(index, &node_ptr);
 
     return node_ptr->value_;
   }
@@ -176,8 +176,9 @@ class BaseHashMap {
   // will create element if it does not exist, thread safe
   ValueType& findOrCreate(const AnyIndex& index) {
     Node* node_ptr;
-
-    getOrCreateNode(index, node_ptr);
+    std::cerr << "A" << std::endl;
+    getOrCreateNode(index, &node_ptr);
+    std::cerr << "B" << std::endl;
 
     return node_ptr->value_;
   }
@@ -267,21 +268,16 @@ class BaseHashMap {
   // it was called
   bool getAtomicPtrPtr(const AnyIndex& index, size_t* hash, Bucket* bucket_ptr,
                        std::atomic<Node*>** atomic_ptr_ptr_ptr) const {
-    std::cerr << "A" << std::endl;
     *hash = hashFunction(index);
     *bucket_ptr = data_buckets_->at(*hash % data_buckets_->size());
     *atomic_ptr_ptr_ptr = &(bucket_ptr->atomicPtr());
-    std::cerr << "B" << std::endl;
     // iterate through the list in the bucket until at the correct hash or at
     // the end
     Node* node_ptr = (*atomic_ptr_ptr_ptr)->load();
-    std::cerr << "B: node_ptr " << node_ptr << std::endl;
     while ((node_ptr != nullptr) && (node_ptr->hash_ != *hash)) {
       *atomic_ptr_ptr_ptr = &(node_ptr->next_node_);
       node_ptr = (*atomic_ptr_ptr_ptr)->load();
     }
-
-    std::cerr << "C" << std::endl;
 
     return node_ptr != nullptr;
   }
@@ -289,7 +285,7 @@ class BaseHashMap {
   // if the data does not exist it will be created
   // if data is created returns true, otherwise false
   // thread safe with one caveat, see autoRehash()
-  bool getOrCreateNode(const AnyIndex& index, Node* node_ptr) {
+  bool getOrCreateNode(const AnyIndex& index, Node** node_ptr_ptr) {
     size_t hash;
     Bucket bucket;
     std::atomic<Node*>* atomic_ptr;
@@ -303,8 +299,8 @@ class BaseHashMap {
       bucket.lock();
 
       // reload atomic to make sure its still unallocated
-      node_ptr = atomic_ptr->load();
-      if (node_ptr != nullptr) {
+      *node_ptr_ptr = atomic_ptr->load();
+      if (*node_ptr_ptr != nullptr) {
         // someone else created it
         bucket.unlock();
         return false;
@@ -313,6 +309,7 @@ class BaseHashMap {
       std::cerr << "c" << std::endl;
 
       atomic_ptr->store(new Node(hash));
+      *node_ptr_ptr = atomic_ptr->load();
       ++num_elements_;
 
       std::cerr << "d" << std::endl;
@@ -324,6 +321,8 @@ class BaseHashMap {
       std::cerr << "e" << std::endl;
 
       bucket.unlock();
+
+      std::cerr << "f" << std::endl;
 
       return true;
     }

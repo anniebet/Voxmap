@@ -494,7 +494,7 @@ class FastTsdfIntegrator : public TsdfIntegrator {
     const Point& origin = T_G_C.getPosition();
 
     for (size_t pt_idx = start_idx; pt_idx < end_idx; ++pt_idx) {
-      ROS_ERROR("get point");
+
       const Point& point_C = points_C[pt_idx];
       const Point point_G = T_G_C * point_C;
       const Color& color = colors[pt_idx];
@@ -506,6 +506,8 @@ class FastTsdfIntegrator : public TsdfIntegrator {
         // TODO(helenol): clear until max ray length instead.
         continue;
       }
+
+      ROS_ERROR("get point");
 
       const FloatingPoint truncation_distance =
           config_.default_truncation_distance;
