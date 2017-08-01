@@ -267,17 +267,21 @@ class BaseHashMap {
   // it was called
   bool getAtomicPtrPtr(const AnyIndex& index, size_t* hash, Bucket* bucket_ptr,
                        std::atomic<Node*>** atomic_ptr_ptr_ptr) const {
+    std::cerr << "A" << std::endl;
     *hash = hashFunction(index);
     *bucket_ptr = data_buckets_->at(*hash % data_buckets_->size());
     *atomic_ptr_ptr_ptr = &(bucket_ptr->atomicPtr());
-
+    std::cerr << "B" << std::endl;
     // iterate through the list in the bucket until at the correct hash or at
     // the end
     Node* node_ptr = (*atomic_ptr_ptr_ptr)->load();
-    while (node_ptr != nullptr || node_ptr->hash_ != *hash) {
+    std::cerr << "B: node_ptr " << node_ptr << std::endl;
+    while ((node_ptr != nullptr) && (node_ptr->hash_ != *hash)) {
       *atomic_ptr_ptr_ptr = &(node_ptr->next_node_);
       node_ptr = (*atomic_ptr_ptr_ptr)->load();
     }
+
+    std::cerr << "C" << std::endl;
 
     return node_ptr != nullptr;
   }
@@ -289,12 +293,12 @@ class BaseHashMap {
     size_t hash;
     Bucket bucket;
     std::atomic<Node*>* atomic_ptr;
-
+    std::cerr << "a" << std::endl;
     if (getAtomicPtrPtr(index, &hash, &bucket, &atomic_ptr)) {
       return false;
     } else {
       // the data does not exist so we are going to create and add it
-
+      std::cerr << "b" << std::endl;
       // get exclusive write access to list
       bucket.lock();
 
@@ -306,12 +310,18 @@ class BaseHashMap {
         return false;
       }
 
+      std::cerr << "c" << std::endl;
+
       atomic_ptr->store(new Node(hash));
       ++num_elements_;
+
+      std::cerr << "d" << std::endl;
 
       // this destroys all thread safety (without adding expensive locks), and
       // so is a no-op on the concurrent version
       autoRehash();
+
+      std::cerr << "e" << std::endl;
 
       bucket.unlock();
 
@@ -333,22 +343,33 @@ class BaseHashMap {
           std::make_shared<std::vector<Bucket>>(
               std::max(min_size, inv_target_load_factor * num_elements_));
 
+      std::cerr << "new_size " << new_buckets->size() << std::endl;
+
+      //loop through current buckets
       for (Bucket& bucket : *data_buckets_) {
         Node* node_ptr = bucket.atomicPtr().load();
+
+        //loop through list in each bucket
         while (node_ptr != nullptr) {
+
+          //find matching bucket in new bucket vector
           std::atomic<Node*>* new_atomic_ptr_ptr =
               &(new_buckets->at(node_ptr->hash_ % new_buckets->size())
                     .atomicPtr());
           Node* new_node_ptr = new_atomic_ptr_ptr->load();
 
+          //move to end of bucket
           while (new_node_ptr != nullptr) {
             new_atomic_ptr_ptr = &(new_node_ptr->next_node_);
             new_node_ptr = new_atomic_ptr_ptr->load();
           }
 
+          //insert data
           new_atomic_ptr_ptr->store(node_ptr);
+          
+          node_ptr = node_ptr->next_node_.load();
         }
-        node_ptr = node_ptr->next_node_.load();
+        
       }
 
       data_buckets_.swap(new_buckets);

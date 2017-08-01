@@ -80,17 +80,13 @@ class MeshIntegrator {
     // mesh.
     for (const typename Block<VoxelType>::Ptr& block :
          tsdf_layer_->getBlockMap()) {
-      ROS_ERROR("a");
       if (block->updated()) {
-        ROS_ERROR("d");
         updateMeshForBlock(block->block_index());
         if (clear_updated_flag) {
           block->updated() = false;
         }
       }
-      ROS_ERROR("c");
     }
-    ROS_ERROR("b");
   }
 
   void extractBlockMesh(typename Block<VoxelType>::ConstPtr block,

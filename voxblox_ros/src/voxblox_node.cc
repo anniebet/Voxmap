@@ -806,9 +806,7 @@ void VoxbloxNode::updateMeshEvent(const ros::TimerEvent& e) {
 
   timing::Timer generate_mesh_timer("mesh/update");
   const bool clear_updated_flag = true;
-  ROS_ERROR("A");
   mesh_integrator_->generateMeshForUpdatedBlocks(clear_updated_flag);
-  ROS_ERROR("B");
   generate_mesh_timer.Stop();
 
   // TODO(helenol): also think about how to update markers incrementally?
