@@ -494,6 +494,7 @@ class FastTsdfIntegrator : public TsdfIntegrator {
     const Point& origin = T_G_C.getPosition();
 
     for (size_t pt_idx = start_idx; pt_idx < end_idx; ++pt_idx) {
+      ROS_ERROR("get point");
       const Point& point_C = points_C[pt_idx];
       const Point point_G = T_G_C * point_C;
       const Color& color = colors[pt_idx];
@@ -534,12 +535,13 @@ class FastTsdfIntegrator : public TsdfIntegrator {
             getLocalFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_);
 
         if (!block || block_idx != last_block_idx) {
+          ROS_ERROR("get new block");
           block = layer_->allocateBlockPtrByIndex(block_idx);
-
+          ROS_ERROR("write update");
           block->updated() = true;
           last_block_idx = block_idx;
         }
-
+        ROS_ERROR("more processing");
         updated_voxels->emplace_back(block->getSafeVoxelByVoxelIndex(local_voxel_idx));
 
         if(!updated_voxels->back().tryToLock()){
