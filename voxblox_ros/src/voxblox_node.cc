@@ -803,7 +803,7 @@ void VoxbloxNode::updateMeshEvent(const ros::TimerEvent& e) {
     esdf_integrator_->updateFromTsdfLayer(clear_updated_flag_esdf);
     publishAllUpdatedEsdfVoxels();
   }*/
-
+/*
   timing::Timer generate_mesh_timer("mesh/update");
   const bool clear_updated_flag = true;
   mesh_integrator_->generateMeshForUpdatedBlocks(clear_updated_flag);
@@ -824,7 +824,7 @@ void VoxbloxNode::updateMeshEvent(const ros::TimerEvent& e) {
     mesh_pointcloud_pub_.publish(pointcloud);
   }
 
-  publish_mesh_timer.Stop();
+  publish_mesh_timer.Stop();*/
 }
 
 }  // namespace voxblox

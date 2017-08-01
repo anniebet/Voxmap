@@ -148,10 +148,12 @@ class BaseHashMap {
   bool tryFind(const AnyIndex& index, ValueType* value) const {
     size_t hash;
     Bucket* bucket_ptr;
+    Node* node_ptr;
     std::atomic<Node*>* atomic_ptr_ptr;
 
-    if (getAtomicPtrPtr(index, &hash, &bucket_ptr, &atomic_ptr_ptr)) {
-      *value = atomic_ptr_ptr->load()->value_;
+    if (getAtomicPtrPtr(index, &hash, &bucket_ptr, &node_ptr,
+                        &atomic_ptr_ptr)) {
+      *value = node_ptr->value_;
       return true;
     } else {
       return false;
@@ -260,24 +262,23 @@ class BaseHashMap {
  private:
   // thread safe, though it might not return an element that was inserted
   // after it was called
+  // and yeah the pointers go a little nuts here
   bool getAtomicPtrPtr(const AnyIndex& index, size_t* hash,
-                       Bucket** bucket_ptr_ptr,
+                       Bucket** bucket_ptr_ptr, Node** node_ptr_ptr,
                        std::atomic<Node*>** atomic_ptr_ptr_ptr) const {
     *hash = hashFunction(index);
     *bucket_ptr_ptr = &(data_buckets_->at(*hash % data_buckets_->size()));
     *atomic_ptr_ptr_ptr = &((*bucket_ptr_ptr)->atomicPtr());
     // iterate through the list in the bucket until at the correct hash or at
     // the end
-    Node* node_ptr = (*atomic_ptr_ptr_ptr)->load();
-    std::cerr << "looking" << std::endl;
-    while ((node_ptr != nullptr) && (node_ptr->hash_ != *hash)) {
-      std::cerr << "in list" << std::endl;
-      *atomic_ptr_ptr_ptr = &(node_ptr->next_node_);
-      node_ptr = (*atomic_ptr_ptr_ptr)->load();
+    *node_ptr_ptr = (*atomic_ptr_ptr_ptr)->load();
+    while ((*node_ptr_ptr != nullptr) && ((*node_ptr_ptr)->hash_ != *hash)) {
+      // the pointeryist line I have ever written
+      *atomic_ptr_ptr_ptr = &((*node_ptr_ptr)->next_node_);
+      *node_ptr_ptr = (*atomic_ptr_ptr_ptr)->load();
     }
 
-    std::cerr << "returning " << std::endl;
-    return node_ptr != nullptr;
+    return *node_ptr_ptr != nullptr;
   }
 
   // if the data does not exist it will be created
@@ -287,16 +288,15 @@ class BaseHashMap {
     size_t hash;
     Bucket* bucket_ptr;
     std::atomic<Node*>* atomic_ptr_ptr;
-    if (getAtomicPtrPtr(index, &hash, &bucket_ptr, &atomic_ptr_ptr)) {
-      std::cerr << "hit!" << std::endl;
+    if (getAtomicPtrPtr(index, &hash, &bucket_ptr, node_ptr_ptr,
+                        &atomic_ptr_ptr)) {
       return false;
     } else {
       // the data does not exist so we are going to create and add it
-      std::cerr << "writing" << std::endl;
+
       // get exclusive write access to list
       bucket_ptr->lock();
 
-      std::cerr << "lock and load" << std::endl;
       // reload atomic to make sure its still unallocated
       *node_ptr_ptr = atomic_ptr_ptr->load();
       if (*node_ptr_ptr != nullptr) {
@@ -309,13 +309,9 @@ class BaseHashMap {
       *node_ptr_ptr = atomic_ptr_ptr->load();
       ++num_elements_;
 
-      std::cerr << "ready to rehash" << std::endl;
-
       // this destroys all thread safety (without adding expensive locks), and
       // so is a no-op on the concurrent version
       autoRehash();
-
-      std::cerr << "unlocking" << std::endl;
 
       bucket_ptr->unlock();
 
@@ -345,6 +341,11 @@ class BaseHashMap {
 
         // loop through list in each bucket
         while (node_ptr != nullptr) {
+
+          // make a copy of the next_node pointer then destroy it
+          Node* next_node_ptr = node_ptr->next_node_.load();
+          node_ptr->next_node_.store(nullptr);
+
           // find matching bucket in new bucket vector
           std::atomic<Node*>* new_atomic_ptr_ptr =
               &(new_buckets->at(node_ptr->hash_ % new_buckets->size())
@@ -360,11 +361,11 @@ class BaseHashMap {
           // insert data
           new_atomic_ptr_ptr->store(node_ptr);
 
-          node_ptr = node_ptr->next_node_.load();
+          node_ptr = next_node_ptr;
         }
       }
 
-      data_buckets_.swap(new_buckets);
+      data_buckets_ = new_buckets;
     }
   }
 
