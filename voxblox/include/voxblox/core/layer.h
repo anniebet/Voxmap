@@ -76,7 +76,17 @@ class Layer {
   // otherwise allocates a new one.
   inline typename BlockType::Ptr allocateBlockPtrByIndex(
       const BlockIndex& index) {
-    return block_map_.findOrCreate(index);
+    bool was_created;
+    typename BlockType::Ptr& block_ptr =
+        block_map_.findOrCreate(index, &was_created);
+
+    if (was_created) {
+      block_ptr = std::make_shared<BlockType>(
+          voxels_per_side_, voxel_size_,
+          getOriginPointFromGridIndex(index, block_size_));
+    }
+
+    return block_ptr;
   }
 
   inline typename BlockType::ConstPtr getBlockPtrByCoordinates(
@@ -101,25 +111,6 @@ class Layer {
   inline BlockIndex computeBlockIndexFromCoordinates(
       const Point& coords) const {
     return getGridIndexFromPoint(coords, block_size_inv_);
-  }
-
-  typename BlockType::Ptr allocateNewBlock(const BlockIndex& index) {
-    auto insert_status = block_map_.insert(std::make_pair(
-        index, std::shared_ptr<BlockType>(new BlockType(
-                   voxels_per_side_, voxel_size_,
-                   getOriginPointFromGridIndex(index, block_size_)))));
-
-    DCHECK(insert_status.second) << "Block already exists when allocating at "
-                                 << index.transpose();
-
-    DCHECK(insert_status.first->second);
-    DCHECK_EQ(insert_status.first->first, index);
-    return insert_status.first->second;
-  }
-
-  inline typename BlockType::Ptr allocateNewBlockByCoordinates(
-      const Point& coords) {
-    return allocateNewBlock(computeBlockIndexFromCoordinates(coords));
   }
 
   void removeBlock(const BlockIndex& index) { block_map_.erase(index); }

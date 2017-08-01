@@ -507,7 +507,7 @@ class FastTsdfIntegrator : public TsdfIntegrator {
         continue;
       }
 
-      ROS_ERROR("get point");
+      //ROS_ERROR("get point");
 
       const FloatingPoint truncation_distance =
           config_.default_truncation_distance;
@@ -537,13 +537,13 @@ class FastTsdfIntegrator : public TsdfIntegrator {
             getLocalFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_);
 
         if (!block || block_idx != last_block_idx) {
-          ROS_ERROR("get new block");
+          //ROS_ERROR("get new block");
           block = layer_->allocateBlockPtrByIndex(block_idx);
-          ROS_ERROR("write update");
+          //ROS_ERROR("write update");
           block->updated() = true;
           last_block_idx = block_idx;
         }
-        ROS_ERROR("more processing");
+        //ROS_ERROR("more processing");
         updated_voxels->emplace_back(block->getSafeVoxelByVoxelIndex(local_voxel_idx));
 
         if(!updated_voxels->back().tryToLock()){

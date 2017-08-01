@@ -176,9 +176,7 @@ class BaseHashMap {
   // will create element if it does not exist, thread safe
   ValueType& findOrCreate(const AnyIndex& index) {
     Node* node_ptr;
-    std::cerr << "A" << std::endl;
     getOrCreateNode(index, &node_ptr);
-    std::cerr << "B" << std::endl;
 
     return node_ptr->value_;
   }
@@ -252,13 +250,10 @@ class BaseHashMap {
     while ((node_ptr == nullptr) && ((++bucket_idx) < data_buckets_->size())) {
       node_ptr = data_buckets_->at(bucket_idx).atomicPtr().load();
     }
-    std::cerr << "node_ptr " << node_ptr << std::endl;
-    std::cerr << "bucket_idx " << bucket_idx << std::endl;
     return PseudoIterator(node_ptr, bucket_idx, data_buckets_);
   }
 
   PseudoIterator end() const {
-    std::cerr << "bucket_end " << data_buckets_->size() << std::endl;
     return PseudoIterator(nullptr, data_buckets_->size(), nullptr);
   }
 
@@ -289,12 +284,11 @@ class BaseHashMap {
     size_t hash;
     Bucket bucket;
     std::atomic<Node*>* atomic_ptr;
-    std::cerr << "a" << std::endl;
     if (getAtomicPtrPtr(index, &hash, &bucket, &atomic_ptr)) {
       return false;
     } else {
       // the data does not exist so we are going to create and add it
-      std::cerr << "b" << std::endl;
+
       // get exclusive write access to list
       bucket.lock();
 
@@ -306,23 +300,15 @@ class BaseHashMap {
         return false;
       }
 
-      std::cerr << "c" << std::endl;
-
       atomic_ptr->store(new Node(hash));
       *node_ptr_ptr = atomic_ptr->load();
       ++num_elements_;
-
-      std::cerr << "d" << std::endl;
 
       // this destroys all thread safety (without adding expensive locks), and
       // so is a no-op on the concurrent version
       autoRehash();
 
-      std::cerr << "e" << std::endl;
-
       bucket.unlock();
-
-      std::cerr << "f" << std::endl;
 
       return true;
     }

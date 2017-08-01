@@ -65,6 +65,16 @@ class MeshLayer {
   // otherwise allocates a new one.
   inline typename Mesh::Ptr allocateMeshPtrByIndex(const BlockIndex& index) {
     return mesh_map_.findOrCreate(index);
+
+    bool was_created;
+    typename Mesh::Ptr& mesh_ptr = mesh_map_.findOrCreate(index, &was_created);
+
+    if (was_created) {
+      mesh_ptr = std::make_shared<Mesh>(
+          block_size_, index.cast<FloatingPoint>() * block_size_);
+    }
+
+    return mesh_ptr;
   }
 
   inline typename Mesh::ConstPtr getMeshPtrByCoordinates(
@@ -86,18 +96,6 @@ class MeshLayer {
   inline BlockIndex computeBlockIndexFromCoordinates(
       const Point& coords) const {
     return getGridIndexFromPoint(coords, block_size_inv_);
-  }
-
-  // Pure virtual function -- inheriting class MUST overwrite.
-  typename Mesh::Ptr allocateNewBlock(const BlockIndex& index) {
-    Mesh::Ptr mesh_ptr = mesh_map_.findOrCreate(index);
-    mesh_ptr = std::make_shared<Mesh>(
-        block_size_, index.cast<FloatingPoint>() * block_size_);
-    return mesh_ptr;
-  }
-
-  inline typename Mesh::Ptr allocateNewBlockByCoordinates(const Point& coords) {
-    return allocateNewBlock(computeBlockIndexFromCoordinates(coords));
   }
 
   void removeMesh(const BlockIndex& index) { mesh_map_.erase(index); }
@@ -122,8 +120,7 @@ class MeshLayer {
 
     // Combine everything in the layer into one giant combined mesh.
     int v = 0;
-    for(Mesh::Ptr& mesh : mesh_map_){
-
+    for (Mesh::Ptr& mesh : mesh_map_) {
       for (size_t i = 0; i < mesh->vertices.size(); ++i) {
         // convert from 3D point to key
         BlockIndex vert_key =
