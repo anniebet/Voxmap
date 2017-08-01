@@ -29,6 +29,12 @@ class Block {
     block_size_ = voxels_per_side_ * voxel_size_;
     block_size_inv_ = 1.0 / block_size_;
     voxels_.reset(new VoxelType[num_voxels_]);
+    voxel_locks_.reset(new std::atomic_flag[num_voxels_]);
+
+    // atomic flags don't zero initialize
+    for (size_t i = 0; i < num_voxels_; ++i) {
+      voxel_locks_.clear();
+    }
   }
 
   explicit Block(const BlockProto& proto);
@@ -112,6 +118,28 @@ class Block {
     return voxels_[computeLinearIndexFromCoordinates(coords)];
   }
 
+  // Locks for ensuring safety during concurrent operations (must be manually
+  // locked, and unlocked, can be ignored if you are unconcerned with thread
+  // safety)
+  inline SafeVoxel<VoxelType>& getSafeVoxelByLinearIndex(size_t index) {
+    DCHECK_LT(index, num_voxels_);
+
+    return SafeVoxel<VoxelType>(voxels_[index], voxel_locks_[index]);
+  }
+
+  inline SafeVoxel<VoxelType>& getSafeVoxelByVoxelIndex(
+      const VoxelIndex& index) {
+    size_t linear_index =
+        computeLinearIndexFromVoxelIndex(index) return SafeVoxel<VoxelType>(
+            voxels_[linear_index], voxel_locks_[linear_index]);
+  }
+
+  inline SafeVoxel<VoxelType>& getSafeVoxelByCoordinates(const Point& coords) {
+    size_t linear_index =
+        computeLinearIndexFromCoordinates(coords) return SafeVoxel<VoxelType>(
+            voxels_[linear_index], voxel_locks_[linear_index]);
+  }
+
   inline bool isValidVoxelIndex(const VoxelIndex& index) const {
     if (index.x() < 0 || index.x() >= voxels_per_side_) {
       return false;
@@ -158,10 +186,11 @@ class Block {
 
   size_t getMemorySize() const;
 
-protected:
+ protected:
   std::unique_ptr<VoxelType[]> voxels_;
 
-  //atomic booleans that can assist in negotiating thread safe access. The caller is under no obligation to actually check or respect the lock. 
+  // atomic booleans that can assist in negotiating thread safe access. The
+  // caller is under no obligation to actually check or respect the lock.
   std::unique_ptr<std::atomic_flag[]> voxel_locks_;
 
   // Derived, cached parameters.

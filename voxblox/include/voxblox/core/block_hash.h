@@ -157,6 +157,12 @@ class BaseHashMap {
     }
   }
 
+  // thread safe
+  bool elementExists(const AnyIndex& index) const {
+    ValueType value;
+    return tryFind(index, &value);
+  }
+
   // will create element if it does not exist, thread safe
   ValueType& findOrCreate(const AnyIndex& index, bool* was_created) {
     Node* node_ptr;

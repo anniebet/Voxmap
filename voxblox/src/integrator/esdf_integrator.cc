@@ -100,31 +100,31 @@ void EsdfIntegrator::addNewRobotPosition(const Point& position) {
 }
 
 void EsdfIntegrator::updateFromTsdfLayerBatch() {
-  esdf_layer_->removeAllBlocks();
+  /*esdf_layer_->removeAllBlocks();
   BlockIndexList tsdf_blocks;
   tsdf_layer_->getAllAllocatedBlocks(&tsdf_blocks);
   tsdf_blocks.insert(tsdf_blocks.end(), updated_blocks_.begin(),
                      updated_blocks_.end());
   updated_blocks_.clear();
   constexpr bool push_neighbors = false;
-  updateFromTsdfBlocks(tsdf_blocks, push_neighbors);
+  updateFromTsdfBlocks(tsdf_blocks, push_neighbors);*/
 }
 
 void EsdfIntegrator::updateFromTsdfLayerBatchOccupancy() {
-  esdf_layer_->removeAllBlocks();
+  /*esdf_layer_->removeAllBlocks();
   BlockIndexList tsdf_blocks;
   tsdf_layer_->getAllAllocatedBlocks(&tsdf_blocks);
-  updateFromTsdfBlocksAsOccupancy(tsdf_blocks);
+  updateFromTsdfBlocksAsOccupancy(tsdf_blocks);*/
 }
 void EsdfIntegrator::updateFromTsdfLayerBatchFullEuclidean() {
-  esdf_layer_->removeAllBlocks();
+  /*esdf_layer_->removeAllBlocks();
   BlockIndexList tsdf_blocks;
   tsdf_layer_->getAllAllocatedBlocks(&tsdf_blocks);
-  updateFromTsdfBlocksFullEuclidean(tsdf_blocks);
+  updateFromTsdfBlocksFullEuclidean(tsdf_blocks);*/
 }
 
 void EsdfIntegrator::updateFromTsdfLayer(bool clear_updated_flag) {
-  BlockIndexList tsdf_blocks;
+  /*BlockIndexList tsdf_blocks;
   tsdf_layer_->getAllUpdatedBlocks(&tsdf_blocks);
   tsdf_blocks.insert(tsdf_blocks.end(), updated_blocks_.begin(),
                      updated_blocks_.end());
@@ -137,7 +137,7 @@ void EsdfIntegrator::updateFromTsdfLayer(bool clear_updated_flag) {
         tsdf_layer_->getBlockByIndex(block_index).updated() = false;
       }
     }
-  }
+  }*/
 }
 
 // Short-cut for pushing neighbors (i.e., incremental update) by default.

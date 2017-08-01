@@ -17,11 +17,11 @@ EsdfOccIntegrator::EsdfOccIntegrator(const Config& config,
 
 // Fixed is overloaded as occupied in this case.
 void EsdfOccIntegrator::updateFromOccLayerBatch() {
-  esdf_layer_->removeAllBlocks();
+  /*esdf_layer_->removeAllBlocks();
   BlockIndexList occ_blocks;
   occ_layer_->getAllAllocatedBlocks(&occ_blocks);
   constexpr bool push_neighbors = false;
-  updateFromOccBlocks(occ_blocks, push_neighbors);
+  updateFromOccBlocks(occ_blocks, push_neighbors);*/
 }
 
 void EsdfOccIntegrator::updateFromOccBlocks(const BlockIndexList& occ_blocks,

@@ -114,22 +114,22 @@ unsigned int EsdfMap::coordPlaneSliceGetDistance(
   unsigned int count = 0;
 
   // Iterate over all blocks.
-  for (const Block<EsdfVoxel>& block : *(esdf_layer_->getBlockMap())) {
+  for (const std::shared_ptr<Block<EsdfVoxel>>& block : esdf_layer_->getBlockMap()) {
     // Iterate over all voxels in said blocks.
     
     
-    Point origin = block.origin();
+    Point origin = block->origin();
     if (std::abs(origin(free_plane_index) - free_plane_val) >
-        block.block_size()) {
+        block->block_size()) {
       continue;
     }
 
     for (size_t linear_index = 0; linear_index < num_voxels_per_block;
          ++linear_index) {
-      Point coord = block.computeCoordinatesFromLinearIndex(linear_index);
-      const EsdfVoxel& voxel = block.getVoxelByLinearIndex(linear_index);
+      Point coord = block->computeCoordinatesFromLinearIndex(linear_index);
+      const EsdfVoxel& voxel = block->getVoxelByLinearIndex(linear_index);
       if (std::abs(coord(free_plane_index) - free_plane_val) <=
-          block.voxel_size()) {
+          block->voxel_size()) {
         double distance;
         if (voxel.observed) {
           distance = voxel.distance;

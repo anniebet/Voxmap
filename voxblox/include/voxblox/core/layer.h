@@ -155,7 +155,7 @@ class Layer {
   size_t getNumberOfAllocatedBlocks() const { return block_map_.size(); }
 
   bool hasBlock(const BlockIndex& block_index) const {
-    return block_map_.count(block_index) > 0;
+    return block_map_.elementExists(block_index);
   }
 
   // Get a pointer to the voxel if its corresponding block is allocated and a

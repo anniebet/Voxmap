@@ -155,7 +155,7 @@ class TsdfIntegrator {
   FloatingPoint voxels_per_side_inv_;
   FloatingPoint block_size_inv_;
 };
-
+/*
 class SimpleTsdfIntegrator : public TsdfIntegrator {
  public:
   SimpleTsdfIntegrator(const Config& config, Layer<TsdfVoxel>* layer)
@@ -237,8 +237,8 @@ class SimpleTsdfIntegrator : public TsdfIntegrator {
     }
     integrate_timer.Stop();
   }
-};
-
+};*/
+/*
 class MergedTsdfIntegrator : public TsdfIntegrator {
  public:
   MergedTsdfIntegrator(const Config& config, Layer<TsdfVoxel>* layer)
@@ -299,13 +299,13 @@ class MergedTsdfIntegrator : public TsdfIntegrator {
                  ray_distance > config_.max_ray_length_m) {
         VoxelIndex voxel_index =
             getGridIndexFromPoint(point_G, voxel_size_inv_);
-        (*clear_map)[voxel_index].push_back(pt_idx);
+        clear_map->findOrCreate(voxel_index).push_back(pt_idx);
         continue;
       }
 
       // Figure out what the end voxel is here.
       VoxelIndex voxel_index = getGridIndexFromPoint(point_G, voxel_size_inv_);
-      (*voxel_map)[voxel_index].push_back(pt_idx);
+      voxel_map->findOrCreate(voxel_index).push_back(pt_idx);
     }
 
     LOG(INFO) << "Went from " << points_C.size() << " points to "
@@ -475,7 +475,7 @@ class MergedTsdfIntegrator : public TsdfIntegrator {
       }
     }
   }
-};
+};*/
 
 class FastTsdfIntegrator : public TsdfIntegrator {
  public:
@@ -523,8 +523,7 @@ class FastTsdfIntegrator : public TsdfIntegrator {
       RayCaster ray_caster(end_scaled, start_scaled);
 
       BlockIndex last_block_idx = BlockIndex::Zero();
-      Block<TsdfVoxel>::Ptr tsdf_block;
-      Block<std::atomic_flag>::Ptr tracker_block;
+      Block<TsdfVoxel>::Ptr block;
 
       AnyIndex global_voxel_idx;
 
@@ -534,20 +533,19 @@ class FastTsdfIntegrator : public TsdfIntegrator {
         VoxelIndex local_voxel_idx =
             getLocalFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_);
 
-        if (!tracker_block || block_idx != last_block_idx) {
-          getBlock(block_idx, &tracker_block, &tsdf_block);
+        if (!block || block_idx != last_block_idx) {
+          block = layer_->allocateBlockPtrByIndex(index);
 
           tsdf_block->updated() = true;
           last_block_idx = block_idx;
         }
 
-        std::atomic_flag& updated_voxel =
-            tracker_block->getVoxelByVoxelIndex(local_voxel_idx);
-        if (updated_voxel.test_and_set()) {
+        updated_voxels->emplace_back(getSafeVoxelByVoxelIndex(local_voxel_idx));
+
+        if(!updated_voxels.back().tryToLock()){
+          updated_voxels.pop_back();
           break;
         }
-
-        updated_voxels->push_back(&(updated_voxel));
 
         const Point voxel_center_G =
             tsdf_block->computeCoordinatesFromVoxelIndex(local_voxel_idx);
@@ -562,9 +560,9 @@ class FastTsdfIntegrator : public TsdfIntegrator {
     }
   }
 
-  void resetTracker(const std::vector<std::atomic_flag*>& updated_voxels) {
-    for (std::atomic_flag* updated_voxel : updated_voxels) {
-      updated_voxel->clear();
+  void resetTracker(const std::vector<SafeVoxel<TsdfVoxel>>& updated_voxels) {
+    for (SafeVoxel<TsdfVoxel> updated_voxel : updated_voxels) {
+      updated_voxel.unlock();
     }
   }
 
@@ -611,65 +609,6 @@ class FastTsdfIntegrator : public TsdfIntegrator {
 
     integrate_timer.Stop();
   }
-
- private:
-  // multiple reads can happen at once so long as no thread is writing
-  bool readBlock(const BlockIndex& index,
-                 Block<std::atomic_flag>::Ptr* tracker_block_ptr,
-                 Block<TsdfVoxel>::Ptr* tsdf_block_ptr) const {
-
-    typename TrackerBlockHashMap::const_iterator it =
-        tracker_block_map_.find(index);
-    if (it != tracker_block_map_.end()) {
-      *tracker_block_ptr = it->second;
-      *tsdf_block_ptr = layer_->allocateBlockPtrByIndex(index);
-      return true;
-    } else {
-      return false;
-    }
-  }
-
-  // writing can only be done when no one else is reading or writing
-  void createBlock(const BlockIndex& index,
-                   Block<std::atomic_flag>::Ptr* tracker_block_ptr,
-                   Block<TsdfVoxel>::Ptr* tsdf_block_ptr) {
-
-    auto insert_status = tracker_block_map_.insert(std::make_pair(
-        index,
-        std::shared_ptr<Block<std::atomic_flag>>(new Block<std::atomic_flag>(
-            layer_->voxels_per_side(), layer_->voxel_size(),
-            getOriginPointFromGridIndex(index, layer_->block_size())))));
-
-    DCHECK(insert_status.first->second);
-    DCHECK_EQ(insert_status.first->first, index);
-    *tracker_block_ptr = insert_status.first->second;
-    *tsdf_block_ptr = layer_->allocateBlockPtrByIndex(index);
-
-    // using a raw c array in the back end means the trackers are uninitialized
-    // a.k,a the bug that tested my sanity
-    for (size_t i = 0; i < (*tracker_block_ptr)->num_voxels(); ++i) {
-      (*tracker_block_ptr)->getVoxelByLinearIndex(i).clear();
-    }
-  }
-
-  // thread safe wrapper for reading/writing to layer
-  void getBlock(const BlockIndex& index,
-                Block<std::atomic_flag>::Ptr* tracker_block_ptr,
-                Block<TsdfVoxel>::Ptr* tsdf_block_ptr) {
-
-    if(config_.integrator_threads != 1){
-      std::lock_guard<std::mutex> lock(mutex_);
-    }
-
-    if (!readBlock(index, tracker_block_ptr, tsdf_block_ptr)) {
-      createBlock(index, tracker_block_ptr, tsdf_block_ptr);
-    }
-  }
-
-  TrackerBlockHashMap tracker_block_map_;
-  mutable std::mutex mutex_;
-
-  size_t current_max_size_;
 };
 
 }  // namespace voxblox

@@ -3,8 +3,8 @@
 
 #include <cstdint>
 
-#include "voxblox/core/common.h"
 #include "voxblox/core/color.h"
+#include "voxblox/core/common.h"
 
 namespace voxblox {
 
@@ -33,10 +33,10 @@ struct OccupancyVoxel {
 
 // Used for serialization only.
 namespace voxel_types {
-  const std::string kNotSerializable = "not_serializable";
-  const std::string kTsdf = "tsdf";
-  const std::string kEsdf = "esdf";
-  const std::string kOccupancy = "occupancy";
+const std::string kNotSerializable = "not_serializable";
+const std::string kTsdf = "tsdf";
+const std::string kEsdf = "esdf";
+const std::string kOccupancy = "occupancy";
 }  // namespace voxel_types
 
 template <typename Type>
@@ -58,6 +58,30 @@ template <>
 inline std::string getVoxelType<OccupancyVoxel>() {
   return voxel_types::kOccupancy;
 }
+
+// packages voxel with atomic flag for negotiating concurrent access
+template <VoxelType>
+class SafeVoxel {
+ public:
+  SafeVoxel(VoxelType& voxel, std::atomic_flag& write_lock_flag)
+      : voxel_(voxel), write_lock_flag_(write_lock_flag) {}
+
+  VoxelType& voxel() { return voxel_; }
+
+  void unlock() { write_lock_flag_.clear(); }
+
+  bool tryToLock() { return !write_lock_flag_.test_and_set(); }
+
+  // spins until locked
+  void lock() {
+    while (write_lock_flag_.test_and_set())
+      ;
+  }
+
+ private:
+  VoxelType& voxel_;
+  std::atomic_flag& write_lock_flag_;
+};
 
 }  // namespace voxblox
 
