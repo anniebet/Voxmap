@@ -143,6 +143,8 @@ class Layer {
 
   const BlockHashMap& getBlockMap() const { return block_map_; }
 
+  void rehashBlockMap(const size_t min_size = 1){ block_map_.rehash(min_size);}
+
   size_t getNumberOfAllocatedBlocks() const { return block_map_.size(); }
 
   bool hasBlock(const BlockIndex& block_index) const {

@@ -259,6 +259,55 @@ class BaseHashMap {
     return PseudoIterator(nullptr, data_buckets_->size(), nullptr);
   }
 
+  // rehashes if the average elements per bucket is over 0.5
+  // the rehash brings this down to 0.25
+  // super not thread safe, will almost certainly cause memory leaks and
+  // segfaults if any other operation happens while it is running
+  void rehash(const size_t min_size = 1) {
+    static constexpr size_t max_inv_load_factor = 2;
+    static constexpr size_t inv_target_load_factor = 4;
+
+    // check if rehash needed
+    if ((max_inv_load_factor * num_elements_) > data_buckets_->size()) {
+      std::shared_ptr<std::vector<Bucket>> new_buckets =
+          std::make_shared<std::vector<Bucket>>(
+              std::max(min_size, inv_target_load_factor * num_elements_));
+
+      std::cerr << "new_size " << new_buckets->size() << std::endl;
+
+      // loop through current buckets
+      for (Bucket& bucket : *data_buckets_) {
+        Node* node_ptr = bucket.atomicPtr().load();
+
+        // loop through list in each bucket
+        while (node_ptr != nullptr) {
+          // make a copy of the next_node pointer then destroy it
+          Node* next_node_ptr = node_ptr->next_node_.load();
+          node_ptr->next_node_.store(nullptr);
+
+          // find matching bucket in new bucket vector
+          std::atomic<Node*>* new_atomic_ptr_ptr =
+              &(new_buckets->at(node_ptr->hash_ % new_buckets->size())
+                    .atomicPtr());
+          Node* new_node_ptr = new_atomic_ptr_ptr->load();
+
+          // move to end of bucket
+          while (new_node_ptr != nullptr) {
+            new_atomic_ptr_ptr = &(new_node_ptr->next_node_);
+            new_node_ptr = new_atomic_ptr_ptr->load();
+          }
+
+          // insert data
+          new_atomic_ptr_ptr->store(node_ptr);
+
+          node_ptr = next_node_ptr;
+        }
+      }
+
+      data_buckets_ = new_buckets;
+    }
+  }
+
  private:
   // thread safe, though it might not return an element that was inserted
   // after it was called
@@ -319,57 +368,7 @@ class BaseHashMap {
     }
   }
 
-  // rehashes if the average elements per bucket is over 0.5
-  // the rehash brings this down to 0.25
-  // super not thread safe, will almost certainly cause memory leaks and
-  // segfaults if any other operation happens while it is running
-  void rehash(const size_t min_size = 1) {
-    static constexpr size_t max_inv_load_factor = 2;
-    static constexpr size_t inv_target_load_factor = 4;
-
-    // check if rehash needed
-    if ((max_inv_load_factor * num_elements_) > data_buckets_->size()) {
-      std::shared_ptr<std::vector<Bucket>> new_buckets =
-          std::make_shared<std::vector<Bucket>>(
-              std::max(min_size, inv_target_load_factor * num_elements_));
-
-      std::cerr << "new_size " << new_buckets->size() << std::endl;
-
-      // loop through current buckets
-      for (Bucket& bucket : *data_buckets_) {
-        Node* node_ptr = bucket.atomicPtr().load();
-
-        // loop through list in each bucket
-        while (node_ptr != nullptr) {
-
-          // make a copy of the next_node pointer then destroy it
-          Node* next_node_ptr = node_ptr->next_node_.load();
-          node_ptr->next_node_.store(nullptr);
-
-          // find matching bucket in new bucket vector
-          std::atomic<Node*>* new_atomic_ptr_ptr =
-              &(new_buckets->at(node_ptr->hash_ % new_buckets->size())
-                    .atomicPtr());
-          Node* new_node_ptr = new_atomic_ptr_ptr->load();
-
-          // move to end of bucket
-          while (new_node_ptr != nullptr) {
-            new_atomic_ptr_ptr = &(new_node_ptr->next_node_);
-            new_node_ptr = new_atomic_ptr_ptr->load();
-          }
-
-          // insert data
-          new_atomic_ptr_ptr->store(node_ptr);
-
-          node_ptr = next_node_ptr;
-        }
-      }
-
-      data_buckets_ = new_buckets;
-    }
-  }
-
-  void autoRehash() { rehash(); };
+  void autoRehash(){/*rehash();*/};
 
   const size_t static inline hashFunction(const BlockIndex& index) {
     static constexpr size_t prime1 = 73856093;

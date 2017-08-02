@@ -507,7 +507,7 @@ class FastTsdfIntegrator : public TsdfIntegrator {
         continue;
       }
 
-      //ROS_ERROR("get point");
+      ROS_ERROR_STREAM("get point " << std::this_thread::get_id());
 
       const FloatingPoint truncation_distance =
           config_.default_truncation_distance;
@@ -537,15 +537,16 @@ class FastTsdfIntegrator : public TsdfIntegrator {
             getLocalFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_);
 
         if (!block || block_idx != last_block_idx) {
-          //ROS_ERROR("get new block");
+          ROS_ERROR_STREAM("get new block " << std::this_thread::get_id());
           block = layer_->allocateBlockPtrByIndex(block_idx);
-          //ROS_ERROR("write update");
-          block->updated() = true;
+          
+          //block->updated() = true;
           last_block_idx = block_idx;
         }
-        //ROS_ERROR("more processing");
+        ROS_ERROR_STREAM("get safe voxel " << std::this_thread::get_id());
         updated_voxels->emplace_back(block->getSafeVoxelByVoxelIndex(local_voxel_idx));
 
+        ROS_ERROR_STREAM("try lock safe voxel " << std::this_thread::get_id());
         if(!updated_voxels->back().tryToLock()){
           updated_voxels->pop_back();
           break;
@@ -556,10 +557,13 @@ class FastTsdfIntegrator : public TsdfIntegrator {
         TsdfVoxel& voxel =
             block->getVoxelByVoxelIndex(local_voxel_idx);
 
+        ROS_ERROR_STREAM("access voxel " << std::this_thread::get_id());
         const float weight = getVoxelWeight(point_C);
 
         updateTsdfVoxel(origin, point_G, voxel_center_G, color,
                         truncation_distance, weight, &voxel);
+
+        ROS_ERROR_STREAM("done " << std::this_thread::get_id());
       }
     }
   }
@@ -575,9 +579,11 @@ class FastTsdfIntegrator : public TsdfIntegrator {
     DCHECK_EQ(points_C.size(), colors.size());
     timing::Timer integrate_timer("integrate");
 
+    layer_->rehashBlockMap(1000000);
+
     // Currently we are memory bottlenecked. More threads actually slow things
     // down. Fancy read-write locks actually make things even worse.
-    config_.integrator_threads = 1;
+    config_.integrator_threads = 2;
 
     size_t points_per_thread =
         std::ceil(points_C.size() / config_.integrator_threads);
