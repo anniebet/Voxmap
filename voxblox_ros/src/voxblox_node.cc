@@ -753,8 +753,8 @@ bool VoxbloxNode::generateMeshCallback(
   }
   generate_mesh_timer.Stop();
 
-  /*timing::Timer publish_mesh_timer("mesh/publish");
-  voxblox_msgs::Mesh mesh_msg;
+  timing::Timer publish_mesh_timer("mesh/publish");
+  /*voxblox_msgs::Mesh mesh_msg;
   generateVoxbloxMeshMsg(mesh_layer_, color_mode_, &mesh_msg);
   mesh_msg.header.frame_id = world_frame_;
   mesh_pub_.publish(mesh_msg);*/
