@@ -201,7 +201,8 @@ VoxbloxNode::VoxbloxNode(const ros::NodeHandle& nh,
   nh_private_.param("publish_slices", publish_slices_, publish_slices_);
 
   // Advertise topics.
-  mesh_pub_ = nh_private_.advertise<voxblox_msgs::Mesh>("mesh", 1, true);
+  mesh_pub_ =
+      nh_private_.advertise<visualization_msgs::MarkerArray>("mesh", 1, true);
 
   if (publish_tsdf_info_) {
     surface_pointcloud_pub_ =
@@ -752,11 +753,11 @@ bool VoxbloxNode::generateMeshCallback(
   }
   generate_mesh_timer.Stop();
 
-  timing::Timer publish_mesh_timer("mesh/publish");
+  /*timing::Timer publish_mesh_timer("mesh/publish");
   voxblox_msgs::Mesh mesh_msg;
   generateVoxbloxMeshMsg(mesh_layer_, color_mode_, &mesh_msg);
   mesh_msg.header.frame_id = world_frame_;
-  mesh_pub_.publish(mesh_msg);
+  mesh_pub_.publish(mesh_msg);*/
 
   if (output_mesh_as_pointcloud_) {
     pcl::PointCloud<pcl::PointXYZRGB> pointcloud;
@@ -843,10 +844,16 @@ void VoxbloxNode::updateMeshEvent(const ros::TimerEvent& e) {
   generate_mesh_timer.Stop();
 
   timing::Timer publish_mesh_timer("mesh/publish");
-  voxblox_msgs::Mesh mesh_msg;
-  generateVoxbloxMeshMsg(mesh_layer_, color_mode_, &mesh_msg);
-  mesh_msg.header.frame_id = world_frame_;
-  mesh_pub_.publish(mesh_msg);
+  // voxblox_msgs::Mesh mesh_msg;
+  // generateVoxbloxMeshMsg(mesh_layer_, color_mode_, &mesh_msg);
+  // mesh_msg.header.frame_id = world_frame_;
+  // mesh_pub_.publish(mesh_msg);
+
+  visualization_msgs::MarkerArray marker_array;
+  marker_array.markers.resize(1);
+  fillMarkerWithMesh(mesh_layer_, color_mode_, &marker_array.markers[0]);
+  marker_array.markers[0].header.frame_id = world_frame_;
+  mesh_pub_.publish(marker_array);
 
   if (output_mesh_as_pointcloud_) {
     pcl::PointCloud<pcl::PointXYZRGB> pointcloud;
