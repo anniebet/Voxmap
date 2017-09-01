@@ -1,5 +1,4 @@
 #include "voxblox/integrator/tsdf_integrator.h"
-#include <iostream>
 
 namespace voxblox {
 
@@ -65,7 +64,7 @@ inline TsdfVoxel* TsdfIntegratorBase::allocateStorageAndGetVoxelPtr(
   const BlockIndex block_idx =
       getBlockIndexFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_inv_);
 
-  if (block_idx != *last_block_idx) {
+  if ((block_idx != *last_block_idx) || (*last_block == nullptr)) {
     *last_block = layer_->getBlockPtrByIndex(block_idx);
     *last_block_idx = block_idx;
   }
