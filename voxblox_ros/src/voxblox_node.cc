@@ -758,6 +758,11 @@ bool VoxbloxNode::generateMeshCallback(
   generateVoxbloxMeshMsg(mesh_layer_, color_mode_, &mesh_msg);
   mesh_msg.header.frame_id = world_frame_;
   mesh_pub_.publish(mesh_msg);*/
+  visualization_msgs::MarkerArray marker_array;
+  marker_array.markers.resize(1);
+  fillMarkerWithMesh(mesh_layer_, color_mode_, &marker_array.markers[0]);
+  marker_array.markers[0].header.frame_id = world_frame_;
+  mesh_pub_.publish(marker_array);
 
   if (output_mesh_as_pointcloud_) {
     pcl::PointCloud<pcl::PointXYZRGB> pointcloud;
